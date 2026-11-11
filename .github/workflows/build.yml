@@ -21,7 +21,6 @@ jobs:
       UPSTREAM_SHA256: 5d05835e52377c7d987145b6c35a944804c88e32e114fd53ede4c36edea20ce1
       APKTOOL_URL: https://github.com/iBotPeaches/Apktool/releases/download/v2.12.1/apktool_2.12.1.jar
       APKTOOL_JAR: apktool.jar
-      ANDROID_BUILD_TOOLS: ${{ env.ANDROID_HOME }}/build-tools/35.0.0
 
     steps:
       - name: Checkout main
