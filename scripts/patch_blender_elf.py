@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Redirect Blender's imported Android system property getter to a local hook.
-
-A user APK cannot set system property debug.blender.renderdiv. We preserve all
-other property queries and patch only the dynamic symbol import in pinned ELF.
-"""
+"""Rename exactly two pinned Blender Android dynamic imports for a private shim."""
 from io import BytesIO
 from pathlib import Path
 import struct
@@ -12,46 +8,55 @@ from elftools.elf.elffile import ELFFile
 
 OLD = b"__system_property_get"
 NEW = b"blender_renderdiv_get"
+POLL_OLD = b"ALooper_pollOnce"
+POLL_NEW = b"blender_pollOnce"
+IMPORTS = ((OLD, NEW), (POLL_OLD, POLL_NEW))
 
 
 def rewrite(blob: bytearray) -> int:
-    if len(OLD) != len(NEW):
-        raise ValueError("replacement symbol length is not identical")
     elf = ELFFile(BytesIO(blob))
     if elf.elfclass != 64 or not elf.little_endian or elf["e_machine"] != "EM_AARCH64":
-        raise ValueError("Expected ELF64 little-endian arm64")
-    symtab = elf.get_section_by_name(".dynsym")
-    strtab = elf.get_section_by_name(".dynstr")
+        raise ValueError("Expected little-endian ELF64 AArch64")
+    syms = elf.get_section_by_name(".dynsym")
+    strings = elf.get_section_by_name(".dynstr")
     versions = elf.get_section_by_name(".gnu.version")
-    if any(s is None for s in (symtab, strtab, versions)):
-        raise ValueError("Missing required dynamic section")
-    matches = [(i, sym) for i, sym in enumerate(symtab.iter_symbols()) if sym.name == OLD.decode()]
-    if len(matches) != 1:
-        raise ValueError(f"Expected exactly one native property import, found {len(matches)}")
-    idx, symbol = matches[0]
-    if symbol["st_shndx"] != "SHN_UNDEF":
-        raise ValueError("System property symbol was not an import")
-    offset = strtab["sh_offset"] + symbol["st_name"]
-    if blob[offset:offset + len(OLD) + 1] != OLD + b"\x00":
-        raise ValueError("Unexpected symbol string bytes")
-    v_off = versions["sh_offset"] + 2 * idx
-    prev = struct.unpack_from("<H", blob, v_off)[0]
-    if prev < 2:
-        raise ValueError(f"Expected versioned libc symbol, found {prev}")
-    blob[offset:offset + len(OLD)] = NEW
-    struct.pack_into("<H", blob, v_off, 1)  # VER_NDX_GLOBAL instead of @LIBC
-    return idx
+    if any(x is None for x in (syms, strings, versions)):
+        raise ValueError("Missing ELF dynamic sections")
+    first_idx = -1
+    for old, new in IMPORTS:
+        if len(old) != len(new):
+            raise ValueError("Import name widths differ")
+        matches = [(i, s) for i, s in enumerate(syms.iter_symbols()) if s.name == old.decode()]
+        if len(matches) != 1:
+            raise ValueError(f"Expected one import of {old!r}, found {len(matches)}")
+        idx, symbol = matches[0]
+        if first_idx == -1:
+            first_idx = idx
+        if symbol["st_shndx"] != "SHN_UNDEF":
+            raise ValueError("Expected imported undefined symbol")
+        offset = strings["sh_offset"] + symbol["st_name"]
+        if blob[offset:offset + len(old) + 1] != old + b"\x00":
+            raise ValueError("Unexpected ELF dynstr bytes")
+        version_offset = versions["sh_offset"] + idx * 2
+        version = struct.unpack_from("<H", blob, version_offset)[0] & 0x7FFF
+        if version == 0:
+            raise ValueError("Local-only symbol; stop")
+        blob[offset:offset + len(old)] = new
+        struct.pack_into("<H", blob, version_offset, 1)
+    return first_idx
 
 
 def patch(path: Path):
-    blob = bytearray(path.read_bytes())
-    idx = rewrite(blob)
-    path.write_bytes(blob)
-    with ELFFile(BytesIO(blob)) as elf:
-        sym = elf.get_section_by_name(".dynsym").get_symbol(idx)
-        if sym.name != NEW.decode():
-            raise ValueError("Failed to re-read patched dynamic symbol")
-    print(f"Redirected Blender Android property import at ELF dynamic symbol {idx}")
+    binary = bytearray(path.read_bytes())
+    rewrite(binary)
+    with ELFFile(BytesIO(binary)) as elf:
+        symbols = list(elf.get_section_by_name(".dynsym").iter_symbols())
+        for old, new in IMPORTS:
+            if sum(s.name == new.decode() and s["st_shndx"] == "SHN_UNDEF"
+                   for s in symbols) != 1 or any(s.name == old.decode() for s in symbols):
+                raise ValueError(f"Failed to verify rewritten import {new!r}")
+    path.write_bytes(binary)
+    print("Rewired renderdiv and Android zero-timeout poll imports to private shim")
 
 
 if __name__ == "__main__":

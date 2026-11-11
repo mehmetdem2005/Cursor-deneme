@@ -1,29 +1,27 @@
 #!/usr/bin/env bash
-# Provide renderdiv=2 inside Blender without requiring system privileges.
-# STOP on any unexpected upstream ELF signature or linker inconsistency.
+# Refuse unrecognized upstream ELF. Private hook for renderdiv and idle polling.
 set -Eeuo pipefail
 decoded="${1:?decoded APK dir}"
-clang="${2:?aarch64-linux-android30-clang path}"
-export CFLAGS="-O2 -fPIC -fvisibility=hidden"
+clang="${2:?Android NDK clang path}"
 libdir="$decoded/lib/arm64-v8a"
 blender="$libdir/libblender.so"
+shim="$libdir/librenderdiv_shim.so"
 test -f "$blender"
 test -x "$clang"
 command -v patchelf >/dev/null
 python3 scripts/patch_blender_elf.py "$blender"
-"$clang" -shared -O2 -fPIC -Wl,--no-undefined -Wl,-soname,librenderdiv_shim.so \
-  -o "$libdir/librenderdiv_shim.so" native/renderdiv_shim.c
+"$clang" -std=c11 -shared -O2 -fPIC -fvisibility=hidden \
+  -Wl,--no-undefined -Wl,-soname,librenderdiv_shim.so \
+  -o "$shim" native/renderdiv_shim.c -landroid
 patchelf --add-needed librenderdiv_shim.so "$blender"
-echo "ELF properties:"
-readelf -Ws "$blender" | grep -F blender_renderdiv_get
+for symbol in blender_renderdiv_get blender_pollOnce; do
+  readelf -Ws "$blender" | grep -E "UND ${symbol}$"
+  readelf -Ws "$shim" | grep -E " ${symbol}$"
+done
 readelf -d "$blender" | grep -F librenderdiv_shim.so
-readelf -Ws "$libdir/librenderdiv_shim.so" | grep -F blender_renderdiv_get
-if readelf -Ws "$blender" | grep -q '__system_property_get@'; then
-  echo "Old versioned symbol still exists in libblender.so" >&2
+readelf -d "$shim" | grep -F libandroid.so
+if readelf -Ws "$blender" | grep -E '__system_property_get@|ALooper_pollOnce@'; then
+  echo "Original imported symbol still exists" >&2
   exit 1
 fi
-if ! readelf -Ws "$blender" | grep -E 'blender_renderdiv_get$' ; then
-  echo "Renamed property import is not unversioned" >&2
-  exit 1
-fi
-echo "Verified Blender renderdiv=2 property shim installed (75% fewer buffer pixels, if native path honors the hook)."
+echo "Validated renderdiv2 and Android adaptive-idle shim."
