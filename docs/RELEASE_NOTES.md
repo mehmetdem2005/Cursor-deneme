@@ -1,27 +1,17 @@
-# Blender Android 11 Ultra Rig Survival — 4x render divisor, severe quality sacrifice
+# Minimal Ultra GPU Rescue for Android 11 Mali
 
-**Experimental APK. Not yet tested on the user's Redmi Note 8 Pro.** The primary goal is to edit a small number of bones and paint weights, then save the .blend; image quality, Material Preview and rendered textures are NOT priorities.
+Experimental; not tested on the actual Redmi Note 8 Pro. Previous v24–v26 GitHub jobs were still queued at last check, so do not assume a new APK is ready.
 
-## What changed
+This variant bundles ONLY addon/ultra_survival.py as the Blender startup module. Old 40KB+ diagnostic addon remains in GitHub for reference, but is NOT loaded into the APK. It removes overlapping save handlers, repeated logging and extra timers.
 
-- The pinned upstream Android Blender engine explicitly allows \`debug.blender.renderdiv\` values 1–4. This build forces **4** app-locally using the previously established ARM64 dynamic-property hook. Window buffer width/height become one-quarter each (1/16 total pixels, 93.75% fewer than full resolution). The same upstream function scales touch input to match. Actual GPU load is NOT guaranteed to drop by 93.75%, as vertex/rigging and shader costs remain.
-- Force \`debug.blender.lowmem=1\` **inside Blender only** to enable its native low-memory configuration, independently from the phone's physical 8 GB RAM.
-- Set Blender viewport AA **OFF**, anisotropic filtering **OFF**, uploaded texture clamp **128**, and GPU subdivision **OFF**.
-- The new **ULTRA RIG: ON (minimum GPU)** profile runs at startup and after loading a .blend. All 3D viewports are Solid/Flat, no cavity, shadows, highlights, grid, relationship/motion paths or weight contour lines. Keep overlays, bone drawings, weight-paint color ramp and brushes enabled. The profile avoids EEVEE Material Preview by default; opening Material Preview manually can still crash old Mali Vulkan drivers.
-- **ULTRA RIG: OFF (restore)** restores original viewport settings for the current session (but the low-res Vulkan buffer requires rebuilding/reinstalling a different APK to change, since it is set when the native window starts).
-- Ultra Rig does **not** switch GPU shaders or viewport state during saves: doing so every three-minute Auto Save can trigger redraw stalls on fragile Mali drivers. The flat Solid UI settings can be stored in the .blend, but the model, skeleton, geometry, weights and UVs are never modified by this profile. Viewport appearance can be restored manually or on a desktop Blender.
-- Native three-minute Auto Save and native Recovery menu added in previous change remain.
+GPU settings: 4x native framebuffer divisor (1/4 of width and height; 1/16 pixels), native low-memory mode, Solid/Flat viewport, antialiasing and anisotropic filtering off, texture limit 128, GPU Subdivision off. Blender Render Simplify is on with viewport subdivision max level 0 and viewport volume resolution 0. Weight color and bone selection overlays remain enabled.
 
-## What this does not solve
+Additional automatic per-mode GPU optimization: in EDIT_ARMATURE mode only, meshes bound to the active armature use BOUNDS instead of full triangles. They revert to their original display type when leaving Edit Armature, including on entry to PAINT_WEIGHT. Armature itself uses STICK. A single lightweight timer detects mode changes every ~1.1 seconds; the system does not toggle every brush stroke.
 
-The user reported crashes after ~5 armature bones and while deleting bones. This number is too small to be an actual model complexity limit. If it crashes even in an empty scene with seven bones, the native Android Vulkan overlay or Blender armature edit/undo path is faulty and must be repaired using actual Android crash logs or a source rebuild. The ultra-low pixel resolution cannot fix CPU-side armature bugs. The GPU may still draw incorrect triangles on old Mali drivers.
+Use View > Ultra GPU / Rig Rescue to disable box view if the mesh silhouette is needed to align bones. Use Ultra GPU OFF to restore original scene/display settings before a final Save As. If a recovery file is saved while the profile is active, Blender may save its temporary display and simplify settings, but bone weights and geometry are unchanged.
 
-## Safety and recovery
+Blender's native 3-minute Auto Save and Recover Auto Save menu remain. Edit Mode changes may be missing from native temporary autosaves; manually save after bone milestones.
 
-Back up any user files before upgrading, as each GitHub Actions build uses a new self-signed certificate and Android may demand uninstalling the old APK. Native Auto Save may not preserve active Edit Mode changes; save manually in Object/Pose mode after each few bones. Keep the original GLB intact.
+CAUTION: the 4x downscaled window may make touch precision unusable, and pixel reduction does not guarantee 93.75% faster rig operations. Bone deletion crashes may come from Blender native armature code or Mali Vulkan driver, which requires logcat to diagnose.
 
-Use the plain File → Save As to save into shared storage. If the model view is too pixelated to position bones, use the previously published run-19 (2x divisor) release; do not change native scale while the app is running.
-
-Sources:
-- upstream GHOST_AndroidMemoryTier.hh, explicit renderdiv range 1..4: https://github.com/simfeo/blender/blob/android-alpha-4/intern/ghost/intern/GHOST_AndroidMemoryTier.hh
-- Blender API texture limit enum: https://docs.blender.org/api/5.1/bpy.types.PreferencesSystem.html
+Code, tests and APK packaging can be validated by CI when GitHub starts the queued run. A queued workflow is not a downloadable APK.
