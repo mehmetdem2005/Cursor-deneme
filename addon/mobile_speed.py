@@ -146,10 +146,12 @@ def _capture(spaces):
             # SpaceView3D: on .blend reload that RNA pointer becomes invalid.
             _previous_spaces[key] = (
                 {name: getattr(sh, name) for name in (
-                    'show_cavity', 'show_shadows', 'show_specular_highlight')
+                    'show_cavity', 'show_shadows', 'show_specular_highlight',
+                    'light')
                  if hasattr(sh, name)},
                 {name: getattr(ov, name) for name in (
-                    'show_floor', 'show_ortho_grid')
+                    'show_floor', 'show_ortho_grid',
+                    'show_axis_x', 'show_axis_y')
                  if hasattr(ov, name)},
             )
 

@@ -27,7 +27,7 @@ class GltfAndMaliTests(unittest.TestCase):
         self.assertIn("('MALI_SAFE', 'Mali Safe'", self.src)
         self.assertIn("('Mali Safe (graphics glitches)', 'MALI_SAFE')", self.src)
         self.assertIn("_set_value(space.shading, 'light', 'FLAT')", self.src)
-        self.assertIn("('show_floor', 'show_ortho_grid',", self.src)
+        self.assertIn("'show_floor', 'show_ortho_grid',", self.src)
         self.assertIn("'show_axis_x', 'show_axis_y')", self.src)
         self.assertIn("for space in _spaces_for_active_windows():", self.src)
         timer = next(n for n in self.module.body if isinstance(n, ast.FunctionDef) and n.name == "_install_menu_when_ready")
