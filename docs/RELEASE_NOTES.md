@@ -1,16 +1,17 @@
-# Blender Lite / Android 11 experimental
+# Blender Lite Android 11 — patched Java API 31 accesses, native support unverified
 
-**This APK is NOT confirmed to run Blender on Android 11.**
+Fix included in this build:
+- The upstream BlenderActivity calls Android's Build.SOC_MANUFACTURER and Build.SOC_MODEL before starting the native window. Both fields were added in API 31 (Android 12). On Android 11 a missing field may throw NoSuchFieldError, which upstream's catch(Exception) does not handle. Both field accesses are replaced in the DEX with Build.MANUFACTURER (API 4) and Build.HARDWARE (API 8).
+- Repacked the actual upstream Blender Lite Android application. No external application, streaming service or substitute 3D engine.
+- Installs with minSdkVersion 30, arm64-v8a; APK is zip-aligned and self-signed by CI.
+- Automated tests assert the two dangerous field references are removed from the packed app's smali before build.
 
-It is a re-signed and repackaged copy of the real Android Blender Lite alpha-4 application with the declared minSDK changed from 31 to 30. The Blender C/C++ binary is unchanged. Native dependencies and GPU behavior on Android 11 may prevent startup.
+**Still unverified:** The app has not been run on an Android 11 device. Upstream requires Android 12; a native linker incompatibility or older Mali Vulkan driver can still crash it before UI. A successful CI build and valid signature do not prove real runtime compatibility.
 
-- Target: Android 11 (API 30), arm64-v8a, Vulkan GPU.
-- Test device: Redmi Note 8 Pro / Mali-G76 MC4.
-- Blender is already contained inside the APK. No external Blender app or remote server is needed.
-- Package/signature: original package ID, NEW experimental key. Uninstall other Blender APKs signed by different keys before installation and back up projects.
-- If installation fails or the app displays black, collect a logcat and any \`Download/blender-startup.log\`.
-- The workflow verifies the APK's signature/manifest/arm64 payload, not actual editor operation. Do not claim the port works until on-device tests pass.
+**Important installation:** The experimental signing key is regenerated with each build. You must back up .blend files and uninstall earlier experimental Blender APKs before installing this version. Do not uninstall the official upstream Blender if you need its stored files without backing them up first.
 
-Source of included Blender code: https://github.com/simfeo/blender/tree/android-alpha-4
+Source: https://github.com/simfeo/blender/tree/android-alpha-4
+Android SDK Build.SOC fields: https://developer.android.com/reference/android/os/Build
+License: upstream GPL-2.0-or-later; this repository publishes its patch sources.
 
-Port and source license: GNU GPL. Experimental Android 11 manifest/repackaging source is in this repository.
+If app still closes instantly, the next requirement is an Android crash trace (Java NoSuchFieldError vs linker vs Vulkan). On Android 11: Settings > About phone > tap MIUI version until Developer options appear; enable Developer options > Take bug report or capture via adb. Do not share any whole bugreport publicly without removing personal information.

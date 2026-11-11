@@ -13,19 +13,26 @@ SOURCE_APK="$(realpath "$SOURCE_APK")"
 OUTPUT_APK="$(realpath -m "$OUTPUT_APK")"
 APKTOOL_JAR="$(realpath "$APKTOOL_JAR")"
 
-echo "[1/6] Decode without disassembling Blender code"
-java -Xmx4g -jar "$APKTOOL_JAR" d -s -f -o "$WORKDIR/decoded" "$SOURCE_APK"
+echo "[1/7] Decode Blender manifest and small Java DEX for Android 11 compatibility"
+java -Xmx4g -jar "$APKTOOL_JAR" d -f -o "$WORKDIR/decoded" "$SOURCE_APK"
 
-echo "[2/6] Set experimental minSdkVersion 30"
+echo "[2/7] Set experimental minSdkVersion 30"
 python3 scripts/patch_sdk.py "$WORKDIR/decoded"
 
-echo "[3/6] Rebuild original Blender application, assets and native libraries"
+echo "[3/7] Fix Android 12-only Java fields used before Blender startup"
+python3 scripts/patch_compat.py "$WORKDIR/decoded"
+if grep -R -n -E "Landroid/os/Build;->SOC_(MANUFACTURER|MODEL)" "$WORKDIR/decoded"/smali*; then
+  echo "API 31 field access remains in DEX smali" >&2
+  exit 1
+fi
+
+echo "[4/7] Rebuild original Blender application, assets and native libraries"
 java -Xmx4g -jar "$APKTOOL_JAR" b -o "$WORKDIR/unsigned.apk" "$WORKDIR/decoded"
 
-echo "[4/6] Align"
+echo "[5/7] Align"
 "$ANDROID_BUILD_TOOLS/zipalign" -p -f 4 "$WORKDIR/unsigned.apk" "$WORKDIR/aligned.apk"
 
-echo "[5/6] Sign test package"
+echo "[6/7] Sign test package"
 KEYSTORE="$WORKDIR/experimental.jks"
 if [[ -n "${BLENDER_SIGNING_KEYSTORE_BASE64:-}" ]]; then
   printf '%s' "$BLENDER_SIGNING_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
@@ -50,7 +57,7 @@ fi
   --min-sdk-version 30 --v2-signing-enabled true --v3-signing-enabled true \
   --out "$OUTPUT_APK" "$WORKDIR/aligned.apk"
 
-echo "[6/6] Verify package, signature, SDK and native libraries"
+echo "[7/7] Verify package, signature, SDK and native libraries"
 "$ANDROID_BUILD_TOOLS/apksigner" verify --min-sdk-version 30 --print-certs "$OUTPUT_APK"
 "$ANDROID_BUILD_TOOLS/zipalign" -c -p 4 "$OUTPUT_APK"
 BADGING="$("$ANDROID_BUILD_TOOLS/aapt" dump badging "$OUTPUT_APK")"
