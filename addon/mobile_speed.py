@@ -79,6 +79,7 @@ def _safe_system_prefs():
 def _mobile_load_pre(_dummy):
     # Do not retain RNA references or old screen pointers across file reload.
     _rig_stop()
+    _depth_stop()
     _previous_spaces.clear()
     _diagnostic("BLEND_LOAD_PRE")
     try:
@@ -568,6 +569,121 @@ class WM_OT_mobile_rig_lite(Operator):
         return {'FINISHED'}
 
 
+
+# Read-only diagnostics for older Mali depth precision / coincident polygons.
+_depth_safe_enabled = False
+_depth_original = {}
+
+
+def _depth_restore():
+    for space in _spaces_for_active_windows():
+        original = _depth_original.get(space.as_pointer())
+        if original is not None:
+            _set_value(space, 'clip_start', original[0])
+            _set_value(space, 'clip_end', original[1])
+    _depth_original.clear()
+
+
+def _depth_apply():
+    if not _depth_safe_enabled:
+        return
+    for space in _spaces_for_active_windows():
+        key = space.as_pointer()
+        if key not in _depth_original:
+            _depth_original[key] = (space.clip_start, space.clip_end)
+        # Opt-in depth-precision test. Nearby or distant objects may clip.
+        _set_value(space, 'clip_start', 0.1)
+        _set_value(space, 'clip_end', 100.0)
+
+
+def _depth_stop():
+    global _depth_safe_enabled
+    _depth_safe_enabled = False
+    _depth_restore()
+
+
+@persistent
+def _depth_save_pre(_unused):
+    if _depth_safe_enabled:
+        _depth_restore()
+
+
+@persistent
+def _depth_save_post(_unused):
+    if _depth_safe_enabled:
+        _depth_apply()
+
+
+class WM_OT_mobile_depth_test(Operator):
+    bl_idname = 'wm.mobile_depth_test'
+    bl_label = 'Depth Precision Test'
+    bl_description = 'Test stronger depth precision in 3D views; does not modify meshes'
+    bl_options = {'REGISTER'}
+    enable: bpy.props.BoolProperty(default=True)
+
+    def execute(self, context):
+        global _depth_safe_enabled
+        if self.enable:
+            _depth_safe_enabled = True
+            _depth_apply()
+            _diagnostic('DEPTH_PRECISION_ON')
+            self.report({'INFO'}, 'Depth test ON. View clip start 0.1, end 100.')
+        else:
+            _depth_stop()
+            _diagnostic('DEPTH_PRECISION_OFF')
+            self.report({'INFO'}, 'Original clipping restored.')
+        return {'FINISHED'}
+
+
+def _sample_overlapping_faces(mesh, max_faces=2500):
+    """Bounded check of identical polygon vertices; no mutations."""
+    count = len(mesh.polygons)
+    if count == 0:
+        return 0, 0, 0
+    stride = max(1, (count + max_faces - 1) // max_faces)
+    seen = set()
+    found = 0
+    checked = 0
+    for idx in range(0, count, stride):
+        poly = mesh.polygons[idx]
+        if len(poly.vertices) < 3:
+            continue
+        signature = tuple(sorted(
+            tuple(round(float(c), 5) for c in mesh.vertices[v].co)
+            for v in poly.vertices))
+        checked += 1
+        if signature in seen:
+            found += 1
+        else:
+            seen.add(signature)
+        if checked >= max_faces:
+            break
+    return found, checked, count
+
+
+class WM_OT_mobile_overlap_check(Operator):
+    bl_idname = 'wm.mobile_overlap_check'
+    bl_label = 'Check Coincident Faces'
+    bl_description = 'Read-only sample of up to 2500 selected mesh polygons'
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != 'MESH':
+            self.report({'WARNING'}, 'Select a mesh object first.')
+            return {'CANCELLED'}
+        try:
+            found, checked, total = _sample_overlapping_faces(obj.data)
+        except (RuntimeError, ReferenceError, IndexError) as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        _diagnostic('OVERLAP_FACES_{}_SAMPLED_{}_TOTAL_{}'.format(found, checked, total))
+        self.report({'WARNING'} if found else {'INFO'},
+                    '{} coincident faces in {} sampled of {} polygons; no edits'.format(
+                        found, checked, total))
+        return {'FINISHED'}
+
+
 class WM_OT_mobile_file_diagnostics(Operator):
     bl_idname = 'wm.mobile_file_diagnostics'
     bl_label = 'Write File Load Diagnostic'
@@ -600,6 +716,11 @@ class VIEW3D_MT_mobile_speed(Menu):
         a.enabled = True
         b = layout.operator('wm.mobile_rig_lite', text='Rig / Weight Paint Lite OFF', icon='CANCEL')
         b.enabled = False
+        d_on = layout.operator('wm.mobile_depth_test', text='Depth Precision Test ON', icon='VIEW_PERSPECTIVE')
+        d_on.enable = True
+        d_off = layout.operator('wm.mobile_depth_test', text='Depth Precision Test OFF', icon='CANCEL')
+        d_off.enable = False
+        layout.operator('wm.mobile_overlap_check', text='Check Coincident Faces', icon='MESH_DATA')
         layout.label(text='Weights, bones and meshes unchanged')
         layout.operator('wm.mobile_file_diagnostics', text='Write File Load Diagnostic')
 
@@ -635,6 +756,12 @@ def register():
     bpy.utils.register_class(WM_OT_mobile_import_gltf)
     bpy.utils.register_class(WM_OT_mobile_safe_texture)
     bpy.utils.register_class(WM_OT_mobile_rig_lite)
+    bpy.utils.register_class(WM_OT_mobile_depth_test)
+    bpy.utils.register_class(WM_OT_mobile_overlap_check)
+    for handler, callback in ((bpy.app.handlers.save_pre, _depth_save_pre),
+                              (bpy.app.handlers.save_post, _depth_save_post)):
+        if callback not in handler:
+            handler.append(callback)
     for handler, fn in ((bpy.app.handlers.save_pre, _rig_save_pre),
                         (bpy.app.handlers.save_post, _rig_save_post)):
         if fn not in handler:
@@ -653,6 +780,11 @@ def register():
 def unregister():
     global _menu_installed, _file_import_installed, _auto_applied
     _rig_stop()
+    _depth_stop()
+    for handler, callback in ((bpy.app.handlers.save_pre, _depth_save_pre),
+                              (bpy.app.handlers.save_post, _depth_save_post)):
+        if callback in handler:
+            handler.remove(callback)
     if bpy.app.timers.is_registered(_rig_tick):
         bpy.app.timers.unregister(_rig_tick)
     for handler, fn in ((bpy.app.handlers.save_pre, _rig_save_pre),
@@ -675,6 +807,8 @@ def unregister():
     _menu_installed = False
     _auto_applied = False
     _restore()
+    bpy.utils.unregister_class(WM_OT_mobile_overlap_check)
+    bpy.utils.unregister_class(WM_OT_mobile_depth_test)
     bpy.utils.unregister_class(WM_OT_mobile_rig_lite)
     bpy.utils.unregister_class(WM_OT_mobile_safe_texture)
     bpy.utils.unregister_class(WM_OT_mobile_import_gltf)
