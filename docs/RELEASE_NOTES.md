@@ -1,15 +1,17 @@
-# Compact UI + GPU Rescue (Android 11 Mali)
+# Safe Edit v29 — Edit Mode crash isolation
 
-The previous v27 4x buffer divisor was too aggressive for a small landscape display: the Blender interface became oversized and hard to navigate. The screenshot also shows the Android on-screen keyboard covering the bottom half after the ViewLayer text field was focused. Back exits the keyboard; it is not a viewport panel.
+User reports that v28 closes immediately on entering Edit Mode on Redmi Note 8 Pro (Android 11, Mali-G76). There is no device logcat trace, so the root cause is unconfirmed.
 
-This release reverts to framebuffer divisor=2 (one half display width and height, one-quarter of native rendered pixels). The app-scoped property hook also supplies debug.blender.uidpi=96, a value explicitly supported by the upstream GHOST_AndroidMemoryTier.hh, to make menus/headers more compact. This DPI is app-scoped; the phone's system display density is unchanged.
+This test release removes previously introduced risky runtime actions:
+- The APK loads addon/safe_edit.py instead of ultra_survival.py.
+- There is NO recurring 1.1-second mode timer, NO changes to armature display style during Edit, NO mesh bounds swapping, NO scene Render Simplify or dependency-graph changes, and NO modifications to weight/bone/model data.
+- GPU profile applies only in OBJECT mode once at startup or on file loading; it uses Solid FLAT, no viewport AA, no cavity/shadows/specular and GPU subdivision off; keeps editing overlays and weight colors.
+- The native blender_pollOnce shim now delegates the exact original ALooper_pollOnce timeout rather than inserting 10/24ms delays. This may increase idle CPU use but removes custom main-loop pacing when switching modes.
+- Native half-resolution 2x framebuffer, compact UI DPI 96, lowmem mode and Android 11 compatibility remain.
+- Blender native temporary autosave is enabled every 3 minutes. Edit-mode changes may not be captured; manually save between risky bone operations.
 
-The same single-module Ultra GPU runtime remains: Solid/Flat shading, AA off, anisotropic filtering off, texture upload clamp 128, GPU subdivision disabled, viewport Simplify subdivision level 0, shadow/cavity/specular/extra overlays off, armature STICK, 3-minute native auto-save. Necessary bone and Weight Paint overlays stay on.
+CI tests include source/runtime safeguards that forbid Edit Mode property changes from this startup addon. APK packaging tests do not test actual Mali GPU or native Blender editing. Do not claim crash fixed on device until user tests.
 
-Automatic BOUNDS mode in Armature Edit is now OFF by default so the user can still see the real mouse model while placing bones. Optional View > Ultra GPU / Rig Rescue > Bone Edit: show mesh as box remains available on demand; it restores the original mesh display in Weight Paint.
+Test on device in this order, after safely backing up .blend and .glb files: start empty scene, enter cube Edit Mode, return Object, add a fresh armature and enter Armature Edit Mode, then test the heavy mouse GLB. If empty scene still fails, collect a system bug report/logcat for Vulkan/SIGSEGV/OOM and compare run-15. Never repeatedly enter a failing mode without a saved file.
 
-This change is **not** a native Mali/Vulkan geometry corruption fix; old driver triangles may still appear. It only fixes the egregious resolution/UI scaling regression while keeping much of GPU savings. Image visual correctness and crash-free 6+ bone edits require real-device verification.
-
-IMPORTANT: Save projects outside app-private storage before reinstalling: Actions signs releases with temporary keys. On the user's screenshot, the Android keyboard can be dismissed using system Back after exiting ViewLayer text editing. If this build cannot open, the known v23 and v27 releases remain available.
-
-Do not automatically decimate or remove mesh data; retain original weights, armature and UV data.
+Known fallback v15: https://github.com/mehmetdem2005/Cursor-deneme/releases/tag/android11-exp-run-15

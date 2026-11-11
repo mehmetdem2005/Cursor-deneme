@@ -27,7 +27,7 @@ if grep -R -n -E "Landroid/os/Build;->SOC_(MANUFACTURER|MODEL)" "$WORKDIR/decode
 fi
 
 echo "[4/9] Add reversible Mobile Performance UI to bundled Python startup scripts"
-python3 scripts/patch_runtime.py "$WORKDIR/decoded" addon/ultra_survival.py
+python3 scripts/patch_runtime.py "$WORKDIR/decoded" addon/safe_edit.py
 
 echo "[5/9] Install app-local half-resolution render buffers via native property shim"
 bash scripts/install_renderdiv.sh "$WORKDIR/decoded" "$ANDROID_NDK_CLANG"
