@@ -80,6 +80,7 @@ def _mobile_load_pre(_dummy):
     # Do not retain RNA references or old screen pointers across file reload.
     _rig_stop()
     _depth_stop()
+    _bone_safe_stop()
     _previous_spaces.clear()
     _diagnostic("BLEND_LOAD_PRE")
     try:
@@ -684,6 +685,174 @@ class WM_OT_mobile_overlap_check(Operator):
         return {'FINISHED'}
 
 
+
+# Non-destructive armature draw-path isolation for Android 11 Mali Vulkan.
+# This deliberately does NOT add, delete, parent, or evaluate any bones.
+_bone_safe_mode = 'OFF'
+_bone_safe_original = None
+_bone_safe_last_count = None
+
+
+def _bone_safe_armature(context):
+    obj = context.active_object
+    if obj is None:
+        return None
+    if obj.type == 'ARMATURE':
+        return obj
+    if obj.type == 'MESH':
+        try:
+            armature = obj.find_armature()
+            return armature if armature and armature.type == 'ARMATURE' else None
+        except (RuntimeError, ReferenceError):
+            return None
+    return None
+
+
+def _bone_safe_capture(context):
+    obj = _bone_safe_armature(context)
+    if obj is None:
+        raise RuntimeError('Select an armature, or its parented mesh, first')
+    mesh_views = {}
+    # A one-time scan only when user enables the optional isolation mode.
+    # Bound all meshes together so no armature-linked part remains unexpectedly heavy.
+    for child in context.view_layer.objects:
+        if child.type != 'MESH':
+            continue
+        if child.parent == obj or any(
+            mod.type == 'ARMATURE' and mod.object == obj
+            for mod in child.modifiers
+        ):
+            mesh_views[child.name_full] = child.display_type
+    arm = obj.data
+    return {
+        'object': obj.name_full,
+        'armature_data': arm.name_full,
+        'armature_display': arm.display_type,
+        'bone_names': arm.show_names,
+        'meshes': mesh_views,
+    }
+
+
+def _bone_safe_set(is_restore=False):
+    original = _bone_safe_original
+    if original is None:
+        return
+    arm = bpy.data.armatures.get(original['armature_data'])
+    if arm is None:
+        return
+    if is_restore:
+        _set_value(arm, 'display_type', original['armature_display'])
+        _set_value(arm, 'show_names', original['bone_names'])
+    else:
+        # STICK uses a lightweight line/dot armature GPU draw pass.
+        _set_value(arm, 'display_type', 'STICK')
+        _set_value(arm, 'show_names', False)
+
+    for name, old_display in original['meshes'].items():
+        obj = bpy.data.objects.get(name)
+        if obj is None or obj.type != 'MESH':
+            continue
+        if is_restore:
+            _set_value(obj, 'display_type', old_display)
+        elif _bone_safe_mode == 'ISOLATE':
+            # Bounds allow bone editing while omitting the heavy mesh triangles.
+            _set_value(obj, 'display_type', 'BOUNDS')
+
+
+def _bone_safe_stop():
+    global _bone_safe_mode, _bone_safe_original, _bone_safe_last_count
+    if _bone_safe_original is not None:
+        try:
+            _bone_safe_set(is_restore=True)
+        except (ReferenceError, RuntimeError, AttributeError) as exc:
+            print('[MobileBones] Restore skipped:', exc)
+    _bone_safe_original = None
+    _bone_safe_mode = 'OFF'
+    _bone_safe_last_count = None
+
+
+def _bone_safe_count():
+    if _bone_safe_original is None:
+        return None
+    arm_obj = bpy.data.objects.get(_bone_safe_original['object'])
+    if arm_obj is None or arm_obj.type != 'ARMATURE':
+        return None
+    data = arm_obj.data
+    # Access collection length only: never dereference active EditBone
+    # pointers during native deletion/undo or cache them for later use.
+    if arm_obj.mode == 'EDIT':
+        return arm_obj.mode, len(data.edit_bones)
+    return arm_obj.mode, len(data.bones)
+
+
+def _bone_safe_watch():
+    global _bone_safe_last_count
+    if _bone_safe_mode == 'OFF':
+        return None
+    try:
+        current = _bone_safe_count()
+        if current is None:
+            _diagnostic('ARMATURE_NOT_FOUND')
+            _bone_safe_stop()
+            return None
+        if current != _bone_safe_last_count:
+            _bone_safe_last_count = current
+            mode, count = current
+            _diagnostic('BONE_COUNT_{}_{}'.format(mode, count))
+    except (ReferenceError, RuntimeError, AttributeError) as exc:
+        print('[MobileBones] Count sample skipped:', exc)
+    return 0.75
+
+
+@persistent
+def _bone_safe_save_pre(_unused):
+    if _bone_safe_mode != 'OFF':
+        _bone_safe_set(is_restore=True)
+
+
+@persistent
+def _bone_safe_save_post(_unused):
+    if _bone_safe_mode != 'OFF':
+        _bone_safe_set(is_restore=False)
+
+
+class WM_OT_mobile_bone_safety(Operator):
+    bl_idname = 'wm.mobile_bone_safety'
+    bl_label = 'Bone Safety Test'
+    bl_description = 'Temporarily simplify armature draw; optionally show bound meshes only as bounds'
+    bl_options = {'REGISTER'}
+
+    mode: bpy.props.EnumProperty(items=[
+        ('STICK', 'Stick Bones', 'Draw bones as simple lines'),
+        ('ISOLATE', 'Isolate Bone Drawing', 'Also show skinned meshes as bounding boxes'),
+        ('OFF', 'Restore Original View', 'Restore original bone and mesh display'),
+    ], default='STICK')
+
+    def execute(self, context):
+        global _bone_safe_mode, _bone_safe_original, _bone_safe_last_count
+        if self.mode == 'OFF':
+            _bone_safe_stop()
+            _diagnostic('BONE_SAFE_OFF')
+            self.report({'INFO'}, 'Bone Safety OFF; previous display restored')
+            return {'FINISHED'}
+        _bone_safe_stop()
+        try:
+            snapshot = _bone_safe_capture(context)
+            _bone_safe_original = snapshot
+            _bone_safe_mode = self.mode
+            _bone_safe_set(is_restore=False)
+            _bone_safe_last_count = None
+            if not bpy.app.timers.is_registered(_bone_safe_watch):
+                bpy.app.timers.register(_bone_safe_watch, first_interval=0.75)
+            _diagnostic('BONE_SAFE_{}'.format(self.mode))
+        except Exception as exc:
+            _bone_safe_stop()
+            self.report({'ERROR'}, 'Bone Safety unavailable: ' + str(exc)[:150])
+            return {'CANCELLED'}
+        self.report({'INFO'}, 'Bone Safety {} active; bones and weights unchanged'.format(self.mode))
+        return {'FINISHED'}
+
+
 class WM_OT_mobile_file_diagnostics(Operator):
     bl_idname = 'wm.mobile_file_diagnostics'
     bl_label = 'Write File Load Diagnostic'
@@ -721,6 +890,13 @@ class VIEW3D_MT_mobile_speed(Menu):
         d_off = layout.operator('wm.mobile_depth_test', text='Depth Precision Test OFF', icon='CANCEL')
         d_off.enable = False
         layout.operator('wm.mobile_overlap_check', text='Check Coincident Faces', icon='MESH_DATA')
+        layout.separator()
+        b1 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: Stick (lightweight)', icon='ARMATURE_DATA')
+        b1.mode = 'STICK'
+        b2 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: Isolate Mesh (bounds)', icon='BBOX')
+        b2.mode = 'ISOLATE'
+        b3 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: OFF / Restore', icon='CANCEL')
+        b3.mode = 'OFF'
         layout.label(text='Weights, bones and meshes unchanged')
         layout.operator('wm.mobile_file_diagnostics', text='Write File Load Diagnostic')
 
@@ -758,6 +934,11 @@ def register():
     bpy.utils.register_class(WM_OT_mobile_rig_lite)
     bpy.utils.register_class(WM_OT_mobile_depth_test)
     bpy.utils.register_class(WM_OT_mobile_overlap_check)
+    bpy.utils.register_class(WM_OT_mobile_bone_safety)
+    for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),
+                              (bpy.app.handlers.save_post, _bone_safe_save_post)):
+        if callback not in handler:
+            handler.append(callback)
     for handler, callback in ((bpy.app.handlers.save_pre, _depth_save_pre),
                               (bpy.app.handlers.save_post, _depth_save_post)):
         if callback not in handler:
@@ -781,6 +962,13 @@ def unregister():
     global _menu_installed, _file_import_installed, _auto_applied
     _rig_stop()
     _depth_stop()
+    _bone_safe_stop()
+    if bpy.app.timers.is_registered(_bone_safe_watch):
+        bpy.app.timers.unregister(_bone_safe_watch)
+    for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),
+                              (bpy.app.handlers.save_post, _bone_safe_save_post)):
+        if callback in handler:
+            handler.remove(callback)
     for handler, callback in ((bpy.app.handlers.save_pre, _depth_save_pre),
                               (bpy.app.handlers.save_post, _depth_save_post)):
         if callback in handler:
@@ -807,6 +995,7 @@ def unregister():
     _menu_installed = False
     _auto_applied = False
     _restore()
+    bpy.utils.unregister_class(WM_OT_mobile_bone_safety)
     bpy.utils.unregister_class(WM_OT_mobile_overlap_check)
     bpy.utils.unregister_class(WM_OT_mobile_depth_test)
     bpy.utils.unregister_class(WM_OT_mobile_rig_lite)
