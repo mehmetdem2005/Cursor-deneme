@@ -94,7 +94,9 @@ def _safe_system_prefs():
         _user_disabled_gpu_subdiv = True
     # Lower maximum uploaded preview texture size before a heavy import.
     if hasattr(sys, 'gl_texture_limit'):
-        _set_value(sys, 'gl_texture_limit', 'CLAMP_512')
+        _set_value(sys, 'gl_texture_limit', 'CLAMP_128')
+    if hasattr(sys, 'anisotropic_filter'):
+        _set_value(sys, 'anisotropic_filter', 'FILTER_0')
     # Mali-G76 / Android 11 Vulkan driver may corrupt or crash with MSAA.
     # OFF disables viewport anti-aliasing without changing mesh/render data.
     if hasattr(sys, 'viewport_aa'):
@@ -107,6 +109,7 @@ def _mobile_load_pre(_dummy):
     _rig_stop()
     _depth_stop()
     _bone_safe_stop()
+    _ultra_rig_restore()
     _previous_spaces.clear()
     _diagnostic("BLEND_LOAD_PRE")
     try:
@@ -118,6 +121,7 @@ def _mobile_load_pre(_dummy):
 @persistent
 def _mobile_load_post(_dummy):
     _configure_three_minute_autosave()
+    _ultra_rig_apply()
     _diagnostic("BLEND_LOAD_POST")
     # File loading may reset preferences; keep GPU subdivision off.
     try:
@@ -890,6 +894,95 @@ class WM_OT_mobile_bone_safety(Operator):
         return {'FINISHED'}
 
 
+
+# Ultra Rig Survival: prioritize responsive bone/weight editing above aesthetics.
+# Default enabled. Only viewport display settings; NEVER change bone, vertex,
+# weight, Armature modifier, texture image, material graph, or selection data.
+_ultra_rig_enabled = True
+_ultra_rig_original = {}
+_ultra_rig_applies = 0
+
+_ULTRA_SH_FIELDS = ('type', 'light', 'color_type', 'show_shadows',
+                    'show_cavity', 'show_specular_highlight')
+_ULTRA_OV_FIELDS = ('show_floor', 'show_ortho_grid', 'show_axis_x',
+                    'show_axis_y', 'show_relationship_lines',
+                    'show_motion_paths', 'show_wpaint_contours')
+
+
+def _ultra_rig_apply():
+    """Apply once per viewport, including after a new .blend is loaded."""
+    global _ultra_rig_applies
+    if not _ultra_rig_enabled:
+        return
+    _safe_system_prefs()
+    for space in _spaces_for_active_windows():
+        try:
+            key = space.as_pointer()
+            if key in _ultra_rig_original:
+                continue
+            sh, overlay = space.shading, space.overlay
+            _ultra_rig_original[key] = (
+                {f: getattr(sh, f) for f in _ULTRA_SH_FIELDS if hasattr(sh, f)},
+                {f: getattr(overlay, f) for f in _ULTRA_OV_FIELDS if hasattr(overlay, f)},
+            )
+            _set_value(sh, 'type', 'SOLID')  # Never compile EEVEE Material Preview
+            _set_value(sh, 'color_type', 'MATERIAL')
+            _set_value(sh, 'light', 'FLAT')
+            for field in ('show_shadows', 'show_cavity', 'show_specular_highlight'):
+                _set_value(sh, field, False)
+            for field in _ULTRA_OV_FIELDS:
+                _set_value(overlay, field, False)
+            # DO NOT touch show_overlays/show_bones/show_extras:
+            # those are necessary for selecting bones and painting weights.
+            _ultra_rig_applies += 1
+        except (AttributeError, ReferenceError, RuntimeError) as exc:
+            print('[UltraRig] viewport skipped:', exc)
+
+
+def _ultra_rig_restore():
+    for space in _spaces_for_active_windows():
+        previous = _ultra_rig_original.get(space.as_pointer())
+        if previous is None:
+            continue
+        for name, value in previous[0].items():
+            _set_value(space.shading, name, value)
+        for name, value in previous[1].items():
+            _set_value(space.overlay, name, value)
+    _ultra_rig_original.clear()
+
+
+@persistent
+def _ultra_rig_save_pre(_unused):
+    if _ultra_rig_enabled:
+        _ultra_rig_restore()
+
+
+@persistent
+def _ultra_rig_save_post(_unused):
+    if _ultra_rig_enabled:
+        _ultra_rig_apply()
+
+
+class WM_OT_mobile_ultra_rig(Operator):
+    bl_idname = 'wm.mobile_ultra_rig'
+    bl_label = 'Ultra Rig Survival Mode'
+    bl_description = 'Disable viewport effects; keep bones, weight colors, brushes, and model data'
+    bl_options = {'REGISTER'}
+    enabled: bpy.props.BoolProperty(default=True)
+
+    def execute(self, context):
+        global _ultra_rig_enabled
+        if not self.enabled:
+            _ultra_rig_restore()
+            _ultra_rig_enabled = False
+            self.report({'INFO'}, 'Ultra Rig OFF: original viewport appearance restored')
+        else:
+            _ultra_rig_enabled = True
+            _ultra_rig_apply()
+            self.report({'INFO'}, 'Ultra Rig ON: 4x low-res Vulkan and Solid/Flat viewport')
+        return {'FINISHED'}
+
+
 class WM_OT_mobile_file_diagnostics(Operator):
     bl_idname = 'wm.mobile_file_diagnostics'
     bl_label = 'Write File Load Diagnostic'
@@ -934,6 +1027,11 @@ class VIEW3D_MT_mobile_speed(Menu):
         b2.mode = 'ISOLATE'
         b3 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: OFF / Restore', icon='CANCEL')
         b3.mode = 'OFF'
+        layout.separator()
+        ultra_on = layout.operator('wm.mobile_ultra_rig', text='ULTRA RIG: ON (minimum GPU)', icon='SHADING_SOLID')
+        ultra_on.enabled = True
+        ultra_off = layout.operator('wm.mobile_ultra_rig', text='ULTRA RIG: OFF (restore)', icon='CANCEL')
+        ultra_off.enabled = False
         layout.label(text='Weights, bones and meshes unchanged')
         layout.operator('wm.mobile_file_diagnostics', text='Write File Load Diagnostic')
 
@@ -959,6 +1057,7 @@ def _install_menu_when_ready():
     # Stability release: performance profiles are opt-in, to avoid any
     # possibility of a stale viewport RNA reference during a file load.
     _auto_applied = True
+    _ultra_rig_apply()
     return None
 
 
@@ -972,6 +1071,11 @@ def register():
     bpy.utils.register_class(WM_OT_mobile_depth_test)
     bpy.utils.register_class(WM_OT_mobile_overlap_check)
     bpy.utils.register_class(WM_OT_mobile_bone_safety)
+    bpy.utils.register_class(WM_OT_mobile_ultra_rig)
+    for handler, callback in ((bpy.app.handlers.save_pre, _ultra_rig_save_pre),
+                              (bpy.app.handlers.save_post, _ultra_rig_save_post)):
+        if callback not in handler:
+            handler.append(callback)
     for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),
                               (bpy.app.handlers.save_post, _bone_safe_save_post)):
         if callback not in handler:
@@ -1001,6 +1105,11 @@ def unregister():
     _rig_stop()
     _depth_stop()
     _bone_safe_stop()
+    _ultra_rig_restore()
+    for handler, callback in ((bpy.app.handlers.save_pre, _ultra_rig_save_pre),
+                              (bpy.app.handlers.save_post, _ultra_rig_save_post)):
+        if callback in handler:
+            handler.remove(callback)
     if bpy.app.timers.is_registered(_bone_safe_watch):
         bpy.app.timers.unregister(_bone_safe_watch)
     for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),
@@ -1033,6 +1142,7 @@ def unregister():
     _menu_installed = False
     _auto_applied = False
     _restore()
+    bpy.utils.unregister_class(WM_OT_mobile_ultra_rig)
     bpy.utils.unregister_class(WM_OT_mobile_bone_safety)
     bpy.utils.unregister_class(WM_OT_mobile_overlap_check)
     bpy.utils.unregister_class(WM_OT_mobile_depth_test)

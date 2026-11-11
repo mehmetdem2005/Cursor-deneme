@@ -13,8 +13,8 @@
 #ifndef MOBILE_RENDER_DIVISOR
 #define MOBILE_RENDER_DIVISOR 2
 #endif
-#if MOBILE_RENDER_DIVISOR != 1 && MOBILE_RENDER_DIVISOR != 2
-#error MOBILE_RENDER_DIVISOR must be 1 or 2
+#if MOBILE_RENDER_DIVISOR < 1 || MOBILE_RENDER_DIVISOR > 4
+#error MOBILE_RENDER_DIVISOR must be 1, 2, 3, or 4
 #endif
 
 static _Thread_local uint64_t last_event_ms;
@@ -57,10 +57,23 @@ __attribute__((visibility("default")))
 int blender_renderdiv_get(const char *name, char *value)
 {
     if (name != 0 && value != 0 && strcmp(name, "debug.blender.renderdiv") == 0) {
-        value[0] = '2';
 #if MOBILE_RENDER_DIVISOR == 1
         value[0] = '1';
+#elif MOBILE_RENDER_DIVISOR == 2
+        value[0] = '2';
+#elif MOBILE_RENDER_DIVISOR == 3
+        value[0] = '3';
+#else
+        value[0] = '4';
 #endif
+        value[1] = '\0';
+        return 1;
+    }
+    /* Android Blender's own source uses this property to choose a
+     * smaller swapchain on low-memory devices. Scope override to Blender. */
+    if (name != 0 && value != 0 &&
+        strcmp(name, "debug.blender.lowmem") == 0) {
+        value[0] = '1';
         value[1] = '\0';
         return 1;
     }
