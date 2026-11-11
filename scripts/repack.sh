@@ -20,7 +20,7 @@ echo "[2/6] Set experimental minSdkVersion 30"
 python3 scripts/patch_sdk.py "$WORKDIR/decoded"
 
 echo "[3/6] Rebuild original Blender application, assets and native libraries"
-java -Xmx4g -jar "$APKTOOL_JAR" b --use-aapt2 -o "$WORKDIR/unsigned.apk" "$WORKDIR/decoded"
+java -Xmx4g -jar "$APKTOOL_JAR" b -o "$WORKDIR/unsigned.apk" "$WORKDIR/decoded"
 
 echo "[4/6] Align"
 "$ANDROID_BUILD_TOOLS/zipalign" -p -f 4 "$WORKDIR/unsigned.apk" "$WORKDIR/aligned.apk"
