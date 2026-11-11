@@ -25,12 +25,15 @@ def main() -> None:
     if not replacements:
         tag = re.search(r"<uses-sdk\b[^>]*>", manifest, re.DOTALL)
         if tag is None:
-            raise SystemExit("Missing <uses-sdk> element; refusing to silently modify the wrong APK")
-        updated = manifest[:tag.end() - 1] + ' android:minSdkVersion="30"' + manifest[tag.end() - 1:]
+            # Apktool can omit this tag and place SDK levels exclusively in apktool.yml.
+            updated = manifest
+        else:
+            updated = manifest[:tag.end() - 1] + ' android:minSdkVersion="30"' + manifest[tag.end() - 1:]
 
     manifest_path.write_text(updated, encoding="utf-8")
 
     apktool_config = root / "apktool.yml"
+    modified_yaml = False
     if apktool_config.exists():
         contents = apktool_config.read_text(encoding="utf-8")
         contents, found = re.subn(
@@ -41,7 +44,10 @@ def main() -> None:
         )
         if found:
             apktool_config.write_text(contents, encoding="utf-8")
+            modified_yaml = True
 
+    if not (replacements or modified_yaml or re.search(r"<uses-sdk\\b", manifest)):
+        raise SystemExit("No SDK information found in manifest or apktool.yml")
     print("Declared minSdkVersion now 30; runtime compatibility remains unverified.")
 
 
