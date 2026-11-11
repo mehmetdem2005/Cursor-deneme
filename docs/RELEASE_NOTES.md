@@ -1,17 +1,21 @@
-# Blender Lite Android 11 — patched Java API 31 accesses, native support unverified
+# Blender Lite Android 11 — optional Mobile Performance profiles
 
-Fix included in this build:
-- The upstream BlenderActivity calls Android's Build.SOC_MANUFACTURER and Build.SOC_MODEL before starting the native window. Both fields were added in API 31 (Android 12). On Android 11 a missing field may throw NoSuchFieldError, which upstream's catch(Exception) does not handle. Both field accesses are replaced in the DEX with Build.MANUFACTURER (API 4) and Build.HARDWARE (API 8).
-- Repacked the actual upstream Blender Lite Android application. No external application, streaming service or substitute 3D engine.
-- Installs with minSdkVersion 30, arm64-v8a; APK is zip-aligned and self-signed by CI.
-- Automated tests assert the two dangerous field references are removed from the packed app's smali before build.
+This build is a conservative experiment based on the confirmed-starting Java compatibility release (run 7). The previous release stays available as a rollback option.
 
-**Still unverified:** The app has not been run on an Android 11 device. Upstream requires Android 12; a native linker incompatibility or older Mali Vulkan driver can still crash it before UI. A successful CI build and valid signature do not prove real runtime compatibility.
+Changes:
+- Include a single Python startup module in Blender's existing runtime payload: \`scripts/startup/mobile_speed.py\`.
+- On the blank default startup screen only, apply a balanced profile: FXAA, 2x anisotropic filtering, 1024 texture clamp, disable solid-view shadows and cavity (grid and tools remain).
+- On any 3D viewport, open **View → Mobile Performance** to choose **Fast** (disable viewport antialiasing, anisotropic filtering, extra shading and viewport floor grid) or restore original settings during the same running session.
+- Existing .blend files are not automatically modified. No geometry, actual render resolution, render quality, camera, or Blender binary code changes.
+- Keep original Vulkan and Android JNI libraries completely unchanged.
+- The APK retains the earlier Android 11 Java API-field correction.
 
-**Important installation:** The experimental signing key is regenerated with each build. You must back up .blend files and uninstall earlier experimental Blender APKs before installing this version. Do not uninstall the official upstream Blender if you need its stored files without backing them up first.
+Caveats:
+- **No physical Redmi Note 8 Pro benchmark or FPS measurement yet.** Some lag comes from CPU scheduling or Mali Vulkan shader compilation and may not be fixable with Python preferences.
+- The source APK's renderer **already** defaults to half-resolution buffers on devices with <6 GB RAM. We do not reduce the window further.
+- The temporary test signing certificate changes each CI run. Back up projects and preferences before uninstalling the older experimental APK. Installer cannot update older package without a matching signature.
+- If Python UI startup module fails, the core Blender engine remains unmodified, and the known-working prior release remains available.
 
 Source: https://github.com/simfeo/blender/tree/android-alpha-4
-Android SDK Build.SOC fields: https://developer.android.com/reference/android/os/Build
-License: upstream GPL-2.0-or-later; this repository publishes its patch sources.
-
-If app still closes instantly, the next requirement is an Android crash trace (Java NoSuchFieldError vs linker vs Vulkan). On Android 11: Settings > About phone > tap MIUI version until Developer options appear; enable Developer options > Take bug report or capture via adb. Do not share any whole bugreport publicly without removing personal information.
+Project source/patched packaging: https://github.com/mehmetdem2005/Cursor-deneme
+Upstream GPL-2.0-or-later.

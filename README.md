@@ -1,6 +1,8 @@
-# Blender Lite — Android 11 compatibility experiment
+# Blender Lite — Android 11 compatibility + optional Mobile Performance
 
-**Latest build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
+**Latest build:** Includes an optional View → Mobile Performance profile selector. Balanced only applies to the blank default startup; choose Fast for speed or Restore for original settings in the current session. This is not a measured GPU optimization and does not modify native Blender rendering code. The confirmed-opening v7 release is preserved for rollback.
+
+**Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 
 **Objective:** One APK that opens the real Blender editor directly on an ARM64 Android phone. This is not RustBlend and not IMATStudy. Development is restricted to this repository's \`main\` branch.
 
@@ -19,7 +21,7 @@ The original [simfeo/blender Android alpha 4](https://github.com/simfeo/blender/
 
 ## Build on GitHub
 
-Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-api30-JAVA-COMPAT-UNVERIFIED.apk** and transfer to the Android phone.
+Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-mobile-speed-EXPERIMENTAL.apk** and transfer to the Android phone.
 
 The build validates the upstream SHA-256, changes the declared Android minimum from 31 to 30, reassembles and signs the package, checks for arm64 native libraries, verifies the signature, and confirms the declared minimum is 30. It is an **experimental repack**, not a native port to API 30.
 

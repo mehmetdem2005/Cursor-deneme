@@ -44,7 +44,7 @@ jobs:
 
       - name: Run compatibility patch tests
         run: |
-          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py
+          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py addon/mobile_speed.py
           python3 -m unittest discover -s tests -v
 
       - name: Download real Blender Lite Android APK
@@ -64,13 +64,13 @@ jobs:
           BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
         run: |
           mkdir -p dist
-          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-api30-JAVA-COMPAT-UNVERIFIED.apk
+          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk
 
       - name: Archive APK and diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-api30-JAVA-COMPAT-UNVERIFIED
-          path: dist/blender-lite-android11-api30-JAVA-COMPAT-UNVERIFIED.apk
+          name: blender-lite-android11-mobile-speed-EXPERIMENTAL
+          path: dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-api30-JAVA-COMPAT-UNVERIFIED.apk" \
+            "dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
             --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
