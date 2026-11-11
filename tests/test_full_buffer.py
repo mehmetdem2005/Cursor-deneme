@@ -11,7 +11,8 @@ class FullBufferModeTests(unittest.TestCase):
         self.assertIn("value[0] = '2';", c)
         self.assertIn('DMOBILE_RENDER_DIVISOR="$render_div"', sh)
         self.assertIn('export ANDROID_BLENDER_RENDERDIV=1', workflow)
-        self.assertIn('FULL-buffer-UNVERIFIED.apk', workflow)
+        self.assertIn('export ANDROID_BLENDER_RENDERDIV=1', workflow)
+        self.assertIn('bone-safe-UNVERIFIED.apk', workflow)
 
 if __name__=='__main__':
     unittest.main()
