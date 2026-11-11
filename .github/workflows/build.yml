@@ -1,4 +1,4 @@
-name: Blender Android 11 - adaptive idle performance
+name: Blender Android 11 - safe texture and rig lite
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p dist
-          APK=dist/blender-lite-android11-adaptive-idle-EXPERIMENTAL.apk
+          APK=dist/blender-lite-android11-rig-lite-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/mobile_speed.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -93,8 +93,8 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-adaptive-idle-EXPERIMENTAL
-          path: dist/blender-lite-android11-adaptive-idle-EXPERIMENTAL.apk
+          name: blender-lite-android11-rig-lite-EXPERIMENTAL
+          path: dist/blender-lite-android11-rig-lite-EXPERIMENTAL.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-adaptive-idle-EXPERIMENTAL.apk" \
+            "dist/blender-lite-android11-rig-lite-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
             --title "Blender Android 11 half-resolution Mali test $GITHUB_RUN_NUMBER (unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

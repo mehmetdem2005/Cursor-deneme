@@ -14,6 +14,8 @@ _previous_spaces = {}
 _menu_installed = False
 _auto_applied = False
 _file_import_installed = False
+_rig_enabled = False
+_rig_saved_viewports = {}
 
 
 
@@ -75,6 +77,7 @@ def _safe_system_prefs():
 @persistent
 def _mobile_load_pre(_dummy):
     # Do not retain RNA references or old screen pointers across file reload.
+    _rig_stop()
     _previous_spaces.clear()
     _diagnostic("BLEND_LOAD_PRE")
     try:
@@ -147,7 +150,7 @@ def _capture(spaces):
             _previous_spaces[key] = (
                 {name: getattr(sh, name) for name in (
                     'show_cavity', 'show_shadows', 'show_specular_highlight',
-                    'light')
+                    'light', 'type', 'color_type')
                  if hasattr(sh, name)},
                 {name: getattr(ov, name) for name in (
                     'show_floor', 'show_ortho_grid',
@@ -278,6 +281,131 @@ def _draw_mobile_glb_import(self, context):
     self.layout.operator('wm.mobile_import_gltf', text='Import GLB / GLTF...', icon='IMPORT')
 
 
+
+# GPU-safe material inspection and rig/weight-paint tools.
+# Only viewport display fields change; weights, bones and objects are untouched.
+_RIG_SH = ('type', 'color_type', 'light', 'show_shadows',
+           'show_cavity', 'show_specular_highlight')
+_RIG_OV = ('show_floor', 'show_ortho_grid', 'show_relationship_lines',
+           'show_motion_paths', 'show_wpaint_contours')
+
+
+def _rig_restore():
+    for space in _spaces_for_active_windows():
+        state = _rig_saved_viewports.get(space.as_pointer())
+        if state is None:
+            continue
+        a, b = state
+        for name, value in a.items():
+            _set_value(space.shading, name, value)
+        for name, value in b.items():
+            _set_value(space.overlay, name, value)
+    _rig_saved_viewports.clear()
+
+
+def _rig_apply():
+    if bpy.context.mode not in {'POSE', 'PAINT_WEIGHT'}:
+        _rig_restore()
+        return
+    for space in _spaces_for_active_windows():
+        key = space.as_pointer()
+        if key in _rig_saved_viewports:
+            continue  # Never reconfigure every brush stroke/frame.
+        sh, ov = space.shading, space.overlay
+        _rig_saved_viewports[key] = (
+            {n: getattr(sh, n) for n in _RIG_SH if hasattr(sh, n)},
+            {n: getattr(ov, n) for n in _RIG_OV if hasattr(ov, n)},
+        )
+        for name, value in (
+            ('type', 'SOLID'), ('color_type', 'MATERIAL'), ('light', 'FLAT'),
+            ('show_shadows', False), ('show_cavity', False),
+            ('show_specular_highlight', False),
+        ):
+            _set_value(sh, name, value)
+        for name in _RIG_OV:
+            _set_value(ov, name, False)
+        # Keep weight ramp, armature bones, paint brushes and object outlines.
+
+
+def _rig_tick():
+    if not _rig_enabled:
+        return None
+    try:
+        _rig_apply()
+    except (RuntimeError, ReferenceError, AttributeError) as exc:
+        print("[MobileRig] update skipped:", exc)
+    return 0.40
+
+
+def _rig_stop():
+    global _rig_enabled
+    _rig_enabled = False
+    _rig_restore()
+
+
+@persistent
+def _rig_save_pre(_unused):
+    if _rig_enabled:
+        _rig_restore()
+
+
+@persistent
+def _rig_save_post(_unused):
+    if _rig_enabled:
+        _rig_apply()
+
+
+class WM_OT_mobile_safe_texture(Operator):
+    bl_idname = 'wm.mobile_safe_texture'
+    bl_label = 'Safe Texture (Solid, no EEVEE)'
+    bl_description = 'Display active UV image textures without unsafe EEVEE Material Preview'
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        if _rig_enabled:
+            _rig_stop()
+        spaces = ([context.area.spaces.active]
+                  if context.area and context.area.type == 'VIEW_3D'
+                  else _spaces_for_active_windows())
+        _capture(spaces)
+        for space in spaces:
+            for attr, val in (
+                ('type', 'SOLID'), ('color_type', 'TEXTURE'),
+                ('light', 'STUDIO'), ('show_shadows', False),
+                ('show_cavity', False), ('show_specular_highlight', False),
+            ):
+                _set_value(space.shading, attr, val)
+        self.report({'INFO'}, 'Safe texture view enabled. Material Preview may still crash.')
+        return {'FINISHED'}
+
+
+class WM_OT_mobile_rig_lite(Operator):
+    bl_idname = 'wm.mobile_rig_lite'
+    bl_label = 'Rig / Weight Paint Lite'
+    bl_description = 'Use simple shading and minimal overlays for Pose/Weight Paint; preserve bones and weights'
+    bl_options = {'REGISTER'}
+
+    enabled: bpy.props.BoolProperty(default=True)
+
+    def execute(self, context):
+        global _rig_enabled
+        if not self.enabled:
+            _rig_stop()
+            self.report({'INFO'}, 'Rig Lite disabled and viewport restored')
+            return {'FINISHED'}
+        _rig_enabled = True
+        try:
+            _rig_apply()
+            if not bpy.app.timers.is_registered(_rig_tick):
+                bpy.app.timers.register(_rig_tick, first_interval=0.40)
+        except Exception as exc:
+            _rig_stop()
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self.report({'INFO'}, 'Rig Lite enabled for Pose/Weight Paint')
+        return {'FINISHED'}
+
+
 class WM_OT_mobile_file_diagnostics(Operator):
     bl_idname = 'wm.mobile_file_diagnostics'
     bl_label = 'Write File Load Diagnostic'
@@ -305,7 +433,12 @@ class VIEW3D_MT_mobile_speed(Menu):
             op = layout.operator('wm.mobile_speed', text=label)
             op.profile = profile
         layout.separator()
-        layout.label(text='Models and saved files unchanged')
+        layout.operator('wm.mobile_safe_texture', text='Safe Texture (No EEVEE)', icon='TEXTURE')
+        a = layout.operator('wm.mobile_rig_lite', text='Rig / Weight Paint Lite ON', icon='ARMATURE_DATA')
+        a.enabled = True
+        b = layout.operator('wm.mobile_rig_lite', text='Rig / Weight Paint Lite OFF', icon='CANCEL')
+        b.enabled = False
+        layout.label(text='Weights, bones and meshes unchanged')
         layout.operator('wm.mobile_file_diagnostics', text='Write File Load Diagnostic')
 
 
@@ -338,6 +471,12 @@ def register():
     bpy.utils.register_class(VIEW3D_MT_mobile_speed)
     bpy.utils.register_class(WM_OT_mobile_file_diagnostics)
     bpy.utils.register_class(WM_OT_mobile_import_gltf)
+    bpy.utils.register_class(WM_OT_mobile_safe_texture)
+    bpy.utils.register_class(WM_OT_mobile_rig_lite)
+    for handler, fn in ((bpy.app.handlers.save_pre, _rig_save_pre),
+                        (bpy.app.handlers.save_post, _rig_save_post)):
+        if fn not in handler:
+            handler.append(fn)
     _safe_system_prefs()
     _diagnostic('STABILITY_PROTECTION_ENABLED')
     for handler, callback in ((bpy.app.handlers.load_pre, _mobile_load_pre),
@@ -351,6 +490,13 @@ def register():
 
 def unregister():
     global _menu_installed, _file_import_installed, _auto_applied
+    _rig_stop()
+    if bpy.app.timers.is_registered(_rig_tick):
+        bpy.app.timers.unregister(_rig_tick)
+    for handler, fn in ((bpy.app.handlers.save_pre, _rig_save_pre),
+                        (bpy.app.handlers.save_post, _rig_save_post)):
+        if fn in handler:
+            handler.remove(fn)
     if bpy.app.timers.is_registered(_install_menu_when_ready):
         bpy.app.timers.unregister(_install_menu_when_ready)
     if bpy.app.timers.is_registered(_memory_heartbeat):
@@ -367,6 +513,8 @@ def unregister():
     _menu_installed = False
     _auto_applied = False
     _restore()
+    bpy.utils.unregister_class(WM_OT_mobile_rig_lite)
+    bpy.utils.unregister_class(WM_OT_mobile_safe_texture)
     bpy.utils.unregister_class(WM_OT_mobile_import_gltf)
     bpy.utils.unregister_class(WM_OT_mobile_file_diagnostics)
     bpy.utils.unregister_class(VIEW3D_MT_mobile_speed)
