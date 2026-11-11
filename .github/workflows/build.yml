@@ -1,0 +1,86 @@
+name: Blender Lite — Android 11 experimental APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android11-experimental-main
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      UPSTREAM_URL: https://github.com/simfeo/blender/releases/download/android-alpha-4/blender-lite.apk
+      UPSTREAM_SHA256: 5d05835e52377c7d987145b6c35a944804c88e32e114fd53ede4c36edea20ce1
+      APKTOOL_URL: https://github.com/iBotPeaches/Apktool/releases/download/v2.12.1/apktool_2.12.1.jar
+      APKTOOL_JAR: apktool.jar
+      ANDROID_BUILD_TOOLS: ${{ env.ANDROID_HOME }}/build-tools/35.0.0
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          sdkmanager --install "build-tools;35.0.0" "platforms;android-35"
+          echo "ANDROID_BUILD_TOOLS=$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_ENV"
+
+      - name: Validate Python source
+        run: python3 -m py_compile scripts/patch_sdk.py
+
+      - name: Download real Blender Lite Android APK
+        shell: bash
+        run: |
+          curl -fLSs --retry 5 --retry-delay 4 "$UPSTREAM_URL" -o upstream.apk
+          printf '%s  %s\n' "$UPSTREAM_SHA256" upstream.apk | sha256sum --check
+          curl -fLSs --retry 5 --retry-delay 4 "$APKTOOL_URL" -o apktool.jar
+          java -jar apktool.jar --version
+
+      - name: Repack, sign and verify Android-11 experiment
+        shell: bash
+        env:
+          BLENDER_SIGNING_KEYSTORE_BASE64: ${{ secrets.BLENDER_SIGNING_KEYSTORE_BASE64 }}
+          BLENDER_KEYSTORE_PASS: ${{ secrets.BLENDER_KEYSTORE_PASS }}
+          BLENDER_KEY_ALIAS: ${{ secrets.BLENDER_KEY_ALIAS }}
+          BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
+        run: |
+          mkdir -p dist
+          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-api30-UNVERIFIED.apk
+
+      - name: Archive APK and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-lite-android11-api30-UNVERIFIED
+          path: dist/blender-lite-android11-api30-UNVERIFIED.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish clearly marked prerelease
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-api30-UNVERIFIED.apk" \
+            --target "$GITHUB_SHA" \
+            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
+            --notes-file docs/RELEASE_NOTES.md --prerelease

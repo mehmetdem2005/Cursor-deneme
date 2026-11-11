@@ -1,0 +1,9 @@
+*.apk
+*.jks
+*.keystore
+apktool.jar
+upstream.apk
+dist/
+work/
+__pycache__/
+*.pyc
