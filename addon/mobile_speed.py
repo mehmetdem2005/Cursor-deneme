@@ -951,18 +951,6 @@ def _ultra_rig_restore():
     _ultra_rig_original.clear()
 
 
-@persistent
-def _ultra_rig_save_pre(_unused):
-    if _ultra_rig_enabled:
-        _ultra_rig_restore()
-
-
-@persistent
-def _ultra_rig_save_post(_unused):
-    if _ultra_rig_enabled:
-        _ultra_rig_apply()
-
-
 class WM_OT_mobile_ultra_rig(Operator):
     bl_idname = 'wm.mobile_ultra_rig'
     bl_label = 'Ultra Rig Survival Mode'
@@ -1072,10 +1060,6 @@ def register():
     bpy.utils.register_class(WM_OT_mobile_overlap_check)
     bpy.utils.register_class(WM_OT_mobile_bone_safety)
     bpy.utils.register_class(WM_OT_mobile_ultra_rig)
-    for handler, callback in ((bpy.app.handlers.save_pre, _ultra_rig_save_pre),
-                              (bpy.app.handlers.save_post, _ultra_rig_save_post)):
-        if callback not in handler:
-            handler.append(callback)
     for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),
                               (bpy.app.handlers.save_post, _bone_safe_save_post)):
         if callback not in handler:
@@ -1106,10 +1090,6 @@ def unregister():
     _depth_stop()
     _bone_safe_stop()
     _ultra_rig_restore()
-    for handler, callback in ((bpy.app.handlers.save_pre, _ultra_rig_save_pre),
-                              (bpy.app.handlers.save_post, _ultra_rig_save_post)):
-        if callback in handler:
-            handler.remove(callback)
     if bpy.app.timers.is_registered(_bone_safe_watch):
         bpy.app.timers.unregister(_bone_safe_watch)
     for handler, callback in ((bpy.app.handlers.save_pre, _bone_safe_save_pre),

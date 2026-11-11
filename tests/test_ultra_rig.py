@@ -38,11 +38,11 @@ class UltraRigTests(unittest.TestCase):
         self.assertIn("_ultra_rig_apply()", function('_mobile_load_post'))
         self.assertIn("_ultra_rig_restore()", function('_mobile_load_pre'))
 
-    def test_original_view_restored_around_saving(self):
-        self.assertIn("_ultra_rig_restore()", function('_ultra_rig_save_pre'))
-        self.assertIn("_ultra_rig_apply()", function('_ultra_rig_save_post'))
-        self.assertIn("bpy.app.handlers.save_pre", PY)
-        self.assertIn("bpy.app.handlers.save_post", PY)
+    def test_no_gpu_mode_switch_during_auto_or_manual_save(self):
+        self.assertNotIn("_ultra_rig_save_pre", PY)
+        self.assertNotIn("_ultra_rig_save_post", PY)
+        self.assertIn("_ultra_rig_restore()", function('_mobile_load_pre'))
+        self.assertIn("_ultra_rig_restore()", function('unregister'))
 
     def test_autosave_remains_three_minute(self):
         self.assertIn("paths.auto_save_time = 3", PY)

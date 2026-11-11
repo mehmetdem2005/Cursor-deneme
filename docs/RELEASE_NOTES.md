@@ -9,7 +9,7 @@
 - Set Blender viewport AA **OFF**, anisotropic filtering **OFF**, uploaded texture clamp **128**, and GPU subdivision **OFF**.
 - The new **ULTRA RIG: ON (minimum GPU)** profile runs at startup and after loading a .blend. All 3D viewports are Solid/Flat, no cavity, shadows, highlights, grid, relationship/motion paths or weight contour lines. Keep overlays, bone drawings, weight-paint color ramp and brushes enabled. The profile avoids EEVEE Material Preview by default; opening Material Preview manually can still crash old Mali Vulkan drivers.
 - **ULTRA RIG: OFF (restore)** restores original viewport settings for the current session (but the low-res Vulkan buffer requires rebuilding/reinstalling a different APK to change, since it is set when the native window starts).
-- Temporary viewport settings are restored around Blender .blend saves and before loading another .blend; model, skeleton, geometry, weights and UVs are never modified by the Ultra Rig profile.
+- Ultra Rig does **not** switch GPU shaders or viewport state during saves: doing so every three-minute Auto Save can trigger redraw stalls on fragile Mali drivers. The flat Solid UI settings can be stored in the .blend, but the model, skeleton, geometry, weights and UVs are never modified by this profile. Viewport appearance can be restored manually or on a desktop Blender.
 - Native three-minute Auto Save and native Recovery menu added in previous change remain.
 
 ## What this does not solve
