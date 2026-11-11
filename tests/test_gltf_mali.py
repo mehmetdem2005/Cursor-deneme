@@ -13,7 +13,8 @@ class GltfAndMaliTests(unittest.TestCase):
 
     def test_glb_import_uses_gltf_operator_not_open_mainfile(self):
         self.assertIn("WM_OT_mobile_import_gltf", self.names)
-        self.assertIn("bpy.ops.import_scene.gltf('INVOKE_DEFAULT')", self.src)
+        self.assertIn("bpy.ops.import_scene.gltf(", self.src)
+        self.assertIn("_mobile_scan_glb(self.filepath)", self.src)
         self.assertNotIn("bpy.ops.wm.open_mainfile(", self.src)
         self.assertIn("TOPBAR_MT_file.prepend(_draw_mobile_glb_import)", self.src)
         self.assertIn("TOPBAR_MT_file.remove(_draw_mobile_glb_import)", self.src)

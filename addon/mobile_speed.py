@@ -8,6 +8,7 @@ The original preferences + viewport state are kept in memory for this session.
 
 import bpy
 from bpy.types import Menu, Operator
+from bpy_extras.io_utils import ImportHelper
 
 _previous_system = None
 _previous_spaces = {}
@@ -250,30 +251,191 @@ class WM_OT_mobile_speed(Operator):
 
 
 
-class WM_OT_mobile_import_gltf(Operator):
+def _mobile_scan_glb(filepath):
+    """Bounded GLB/glTF metadata read: never reads mesh BIN/image content."""
+    import json
+    import os
+    import struct
+
+    suffix = os.path.splitext(filepath)[1].lower()
+    if suffix not in {'.glb', '.gltf'} or not os.path.isfile(filepath):
+        raise ValueError('Choose an existing GLB or glTF file')
+    size = os.path.getsize(filepath)
+    if size < 12 or size > 512 * 1024 * 1024:
+        raise ValueError('Truncated file or file over 512 MiB')
+    if suffix == '.glb':
+        with open(filepath, 'rb') as src:
+            hdr = src.read(12)
+            if len(hdr) != 12:
+                raise ValueError('Missing GLB header')
+            magic, version, declared = struct.unpack('<4sII', hdr)
+            if magic != b'glTF' or version != 2 or declared != size:
+                raise ValueError('Incorrect GLB header, version or length')
+            ch = src.read(8)
+            if len(ch) != 8:
+                raise ValueError('Missing GLB JSON chunk')
+            n, tag = struct.unpack('<I4s', ch)
+            if tag != b'JSON' or n == 0 or n > 16 * 1024 * 1024 or 20 + n > size:
+                raise ValueError('Invalid or oversized GLB JSON chunk')
+            raw = src.read(n)
+            if len(raw) != n:
+                raise ValueError('Incomplete GLB JSON')
+            pos = 20 + n
+            while pos < size:
+                src.seek(pos)
+                header = src.read(8)
+                if len(header) != 8:
+                    raise ValueError('Incomplete GLB chunk header')
+                length, _tag = struct.unpack('<I4s', header)
+                pos += 8 + length
+                if pos > size:
+                    raise ValueError('GLB chunk extends beyond file')
+    else:
+        if size > 16 * 1024 * 1024:
+            raise ValueError('Oversized glTF JSON')
+        with open(filepath, 'rb') as src:
+            raw = src.read()
+
+    def reject_constant(token):
+        raise ValueError('Invalid numeric token ' + token)
+
+    doc = json.loads(raw.decode('utf-8').strip('\x00 \r\n\t '),
+                     parse_constant=reject_constant)
+    if not isinstance(doc, dict) or not isinstance(doc.get('asset'), dict):
+        raise ValueError('GLB has no glTF asset metadata')
+    if doc['asset'].get('version') != '2.0':
+        raise ValueError('Only glTF 2.0 is supported')
+
+    def arr(key):
+        value = doc.get(key, [])
+        if not isinstance(value, list):
+            raise ValueError('Invalid glTF array ' + key)
+        return value
+
+    meshes = arr('meshes')
+    accessors = arr('accessors')
+    buffers = arr('buffers')
+    images = arr('images')
+    views = arr('bufferViews')
+    if len(accessors) > 200000 or len(meshes) > 100000:
+        raise ValueError('Excessive GLB metadata')
+    vertices = 0
+    primitives = 0
+    draco = False
+    for mesh in meshes:
+        if not isinstance(mesh, dict):
+            raise ValueError('Invalid mesh structure')
+        for part in mesh.get('primitives', []):
+            primitives += 1
+            attrs = part.get('attributes', {})
+            if isinstance(attrs, dict) and isinstance(attrs.get('POSITION'), int):
+                idx = attrs['POSITION']
+                if idx < 0 or idx >= len(accessors):
+                    raise ValueError('Invalid vertex accessor index')
+                count = accessors[idx].get('count', 0)
+                if not isinstance(count, int) or count < 0:
+                    raise ValueError('Invalid vertex count')
+                vertices += count
+            draco |= 'KHR_draco_mesh_compression' in part.get('extensions', {})
+    required = set(doc.get('extensionsRequired', []))
+    used = set(doc.get('extensionsUsed', []))
+    meshopt = any(
+        'EXT_meshopt_compression' in v.get('extensions', {}) or
+        'KHR_meshopt_compression' in v.get('extensions', {})
+        for v in views if isinstance(v, dict))
+    buffer_bytes = sum(max(0, int(b.get('byteLength', 0))) for b in buffers)
+    basis = 'KHR_texture_basisu' in used or 'KHR_texture_basisu' in required
+    basis |= any(
+        im.get('mimeType') == 'image/ktx2' or
+        str(im.get('uri', '')).lower().endswith('.ktx2')
+        for im in images if isinstance(im, dict))
+    return {
+        'size': size, 'vertices': vertices, 'primitives': primitives,
+        'images': len(images), 'buffer_bytes': buffer_bytes,
+        'draco': draco or 'KHR_draco_mesh_compression' in required,
+        'meshopt': meshopt or bool(required & {
+            'EXT_meshopt_compression', 'KHR_meshopt_compression'}),
+        'basis': basis,
+        'heavy': size > 60 * 1024 * 1024 or vertices > 1000000 or
+                 buffer_bytes > 256 * 1024 * 1024,
+    }
+
+
+class WM_OT_mobile_import_gltf(Operator, ImportHelper):
     bl_idname = 'wm.mobile_import_gltf'
-    bl_label = 'Import GLB / GLTF'
-    bl_description = 'Import glTF 2.0 into the current scene; File > Open is only for .blend projects'
+    bl_label = 'Scan and Import GLB / GLTF'
+    bl_description = 'Check file structure, compression and estimated complexity before Blender import'
     bl_options = {'REGISTER'}
+    filename_ext = '.glb'
+    filepath: bpy.props.StringProperty(subtype='FILE_PATH')
+    filter_glob: bpy.props.StringProperty(default='*.glb;*.gltf', options={'HIDDEN'})
+    allow_heavy: bpy.props.BoolProperty(
+        name='Allow heavy GLB',
+        description='Permit high-resource import that may crash Android',
+        default=False)
+
+    def draw(self, context):
+        self.layout.prop(self, 'allow_heavy')
 
     def invoke(self, context, event):
-        # Blender 5.3 ships the official glTF importer; the operator may be
-        # disabled if the corresponding bundled add-on has not registered yet.
-        try:
-            if 'gltf' not in dir(bpy.ops.import_scene):
-                import addon_utils
-                addon_utils.enable('io_scene_gltf2', default_set=False)
-            _diagnostic('GLTF_IMPORT_DIALOG')
-            return bpy.ops.import_scene.gltf('INVOKE_DEFAULT')
-        except (RuntimeError, AttributeError, ImportError, TypeError) as exc:
-            self.report({'ERROR'}, 'glTF importer unavailable: ' + str(exc))
-            _diagnostic('GLTF_IMPORT_ERROR')
-            return {'CANCELLED'}
+        _diagnostic('GLB_FILE_SELECTION')
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        # The menu normally invokes the file chooser. Keep this as a safe
-        # fallback for Blender's EXEC operator context.
-        return self.invoke(context, None)
+        try:
+            metadata = _mobile_scan_glb(self.filepath)
+        except (ValueError, OSError, TypeError) as exc:
+            self.report({'ERROR'}, 'GLB preflight: ' + str(exc)[:150])
+            _diagnostic('GLB_INVALID')
+            return {'CANCELLED'}
+
+        print('[MobileGLB] preflight: bytes={} vertices={} parts={} images={} buffer={}'.format(
+            metadata['size'], metadata['vertices'], metadata['primitives'],
+            metadata['images'], metadata['buffer_bytes']), flush=True)
+        try:
+            import addon_utils
+            addon_utils.enable('io_scene_gltf2', default_set=False)
+            import io_scene_gltf2
+            for feature, checker in (
+                ('draco', 'is_draco_available'),
+                ('meshopt', 'is_meshopt_available')):
+                if metadata[feature] and not (
+                    hasattr(io_scene_gltf2, checker) and getattr(io_scene_gltf2, checker)()):
+                    self.report({'ERROR'}, feature + ' compressed meshes unsupported in this Lite APK')
+                    _diagnostic('GLB_COMPRESSION_UNAVAILABLE')
+                    return {'CANCELLED'}
+        except (ImportError, RuntimeError, AttributeError) as exc:
+            self.report({'ERROR'}, 'glTF add-on unavailable: ' + str(exc)[:130])
+            _diagnostic('GLB_ADDON_MISSING')
+            return {'CANCELLED'}
+
+        if metadata['heavy'] and not self.allow_heavy:
+            self.report({'ERROR'}, 'Heavy GLB: choose Allow heavy GLB to attempt import')
+            _diagnostic('GLB_HEAVY_REJECTED')
+            return {'CANCELLED'}
+        if metadata['basis']:
+            self.report({'WARNING'}, 'KTX2/BasisU textures may not be supported in this port')
+
+        # Avoid costly EEVEE Vulkan compilation while new scene resources load.
+        if _rig_enabled:
+            _rig_stop()
+        for space in _spaces_for_active_windows():
+            _set_value(space.shading, 'type', 'SOLID')
+            _set_value(space.shading, 'light', 'FLAT')
+            _set_value(space.shading, 'show_shadows', False)
+            _set_value(space.shading, 'show_cavity', False)
+
+        _diagnostic('GLB_IMPORT_BEGIN')
+        try:
+            result = bpy.ops.import_scene.gltf(
+                'EXEC_DEFAULT', filepath=self.filepath, import_unused_materials=False)
+        except (Exception,) as exc:
+            self.report({'ERROR'}, 'glTF import error: ' + str(exc)[:130])
+            _diagnostic('GLB_IMPORT_ERROR')
+            return {'CANCELLED'}
+        _diagnostic('GLB_IMPORT_RETURN')
+        return result
 
 
 def _draw_mobile_glb_import(self, context):
