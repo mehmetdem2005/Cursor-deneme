@@ -1,17 +1,15 @@
-# Minimal Ultra GPU Rescue for Android 11 Mali
+# Compact UI + GPU Rescue (Android 11 Mali)
 
-Experimental; not tested on the actual Redmi Note 8 Pro. Previous v24–v26 GitHub jobs were still queued at last check, so do not assume a new APK is ready.
+The previous v27 4x buffer divisor was too aggressive for a small landscape display: the Blender interface became oversized and hard to navigate. The screenshot also shows the Android on-screen keyboard covering the bottom half after the ViewLayer text field was focused. Back exits the keyboard; it is not a viewport panel.
 
-This variant bundles ONLY addon/ultra_survival.py as the Blender startup module. Old 40KB+ diagnostic addon remains in GitHub for reference, but is NOT loaded into the APK. It removes overlapping save handlers, repeated logging and extra timers.
+This release reverts to framebuffer divisor=2 (one half display width and height, one-quarter of native rendered pixels). The app-scoped property hook also supplies debug.blender.uidpi=96, a value explicitly supported by the upstream GHOST_AndroidMemoryTier.hh, to make menus/headers more compact. This DPI is app-scoped; the phone's system display density is unchanged.
 
-GPU settings: 4x native framebuffer divisor (1/4 of width and height; 1/16 pixels), native low-memory mode, Solid/Flat viewport, antialiasing and anisotropic filtering off, texture limit 128, GPU Subdivision off. Blender Render Simplify is on with viewport subdivision max level 0 and viewport volume resolution 0. Weight color and bone selection overlays remain enabled.
+The same single-module Ultra GPU runtime remains: Solid/Flat shading, AA off, anisotropic filtering off, texture upload clamp 128, GPU subdivision disabled, viewport Simplify subdivision level 0, shadow/cavity/specular/extra overlays off, armature STICK, 3-minute native auto-save. Necessary bone and Weight Paint overlays stay on.
 
-Additional automatic per-mode GPU optimization: in EDIT_ARMATURE mode only, meshes bound to the active armature use BOUNDS instead of full triangles. They revert to their original display type when leaving Edit Armature, including on entry to PAINT_WEIGHT. Armature itself uses STICK. A single lightweight timer detects mode changes every ~1.1 seconds; the system does not toggle every brush stroke.
+Automatic BOUNDS mode in Armature Edit is now OFF by default so the user can still see the real mouse model while placing bones. Optional View > Ultra GPU / Rig Rescue > Bone Edit: show mesh as box remains available on demand; it restores the original mesh display in Weight Paint.
 
-Use View > Ultra GPU / Rig Rescue to disable box view if the mesh silhouette is needed to align bones. Use Ultra GPU OFF to restore original scene/display settings before a final Save As. If a recovery file is saved while the profile is active, Blender may save its temporary display and simplify settings, but bone weights and geometry are unchanged.
+This change is **not** a native Mali/Vulkan geometry corruption fix; old driver triangles may still appear. It only fixes the egregious resolution/UI scaling regression while keeping much of GPU savings. Image visual correctness and crash-free 6+ bone edits require real-device verification.
 
-Blender's native 3-minute Auto Save and Recover Auto Save menu remain. Edit Mode changes may be missing from native temporary autosaves; manually save after bone milestones.
+IMPORTANT: Save projects outside app-private storage before reinstalling: Actions signs releases with temporary keys. On the user's screenshot, the Android keyboard can be dismissed using system Back after exiting ViewLayer text editing. If this build cannot open, the known v23 and v27 releases remain available.
 
-CAUTION: the 4x downscaled window may make touch precision unusable, and pixel reduction does not guarantee 93.75% faster rig operations. Bone deletion crashes may come from Blender native armature code or Mali Vulkan driver, which requires logcat to diagnose.
-
-Code, tests and APK packaging can be validated by CI when GitHub starts the queued run. A queued workflow is not a downloadable APK.
+Do not automatically decimate or remove mesh data; retain original weights, armature and UV data.

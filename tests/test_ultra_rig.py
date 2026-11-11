@@ -14,7 +14,7 @@ def function(name):
 
 class UltraRigTests(unittest.TestCase):
     def test_max_supported_render_scale_and_android_lowmem_override(self):
-        self.assertIn("export ANDROID_BLENDER_RENDERDIV=4", WORKFLOW)
+        self.assertIn("export ANDROID_BLENDER_RENDERDIV=2", WORKFLOW)
         self.assertIn("#if MOBILE_RENDER_DIVISOR < 1 || MOBILE_RENDER_DIVISOR > 4", C)
         self.assertIn("value[0] = '4';", C)
         self.assertIn('"debug.blender.lowmem"', C)

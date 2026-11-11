@@ -1,4 +1,4 @@
-name: Blender Android 11 - minimal ultra gpu rescue
+name: Blender Android 11 - compact UI GPU rescue
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: blender-android11-minimal-gpu
+  group: blender-android11-compact-ui
   cancel-in-progress: false
 
 jobs:
@@ -77,8 +77,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p dist
-          export ANDROID_BLENDER_RENDERDIV=4
-          APK=dist/blender-lite-android11-ULTRA-GPU-RESCUE-EXPERIMENTAL.apk
+          export ANDROID_BLENDER_RENDERDIV=2
+          APK=dist/blender-lite-android11-COMPACT-UI-RIG-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/ultra_survival.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -94,8 +94,8 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-ULTRA-GPU-RESCUE-EXPERIMENTAL
-          path: dist/blender-lite-android11-ULTRA-GPU-RESCUE-EXPERIMENTAL.apk
+          name: blender-lite-android11-COMPACT-UI-RIG-EXPERIMENTAL
+          path: dist/blender-lite-android11-COMPACT-UI-RIG-EXPERIMENTAL.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -106,7 +106,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-ULTRA-GPU-RESCUE-EXPERIMENTAL.apk" \
+            "dist/blender-lite-android11-COMPACT-UI-RIG-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
-            --title "Blender Android 11 ULTRA Rig 4X buffers $GITHUB_RUN_NUMBER (unverified)" \
+            --title "Blender Android 11 compact UI + 2x GPU buffers $GITHUB_RUN_NUMBER (unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

@@ -38,6 +38,6 @@ class UltraSurvivalTests(unittest.TestCase):
         wf=Path(".github/workflows/build.yml").read_text()
         self.assertIn("addon/ultra_survival.py",repack)
         self.assertIn("addon/ultra_survival.py",wf)
-        self.assertIn("ANDROID_BLENDER_RENDERDIV=4",wf)
+        self.assertIn("ANDROID_BLENDER_RENDERDIV=2",wf)
 if __name__=="__main__":
     unittest.main()

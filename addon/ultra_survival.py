@@ -5,7 +5,7 @@ from bpy.types import Menu, Operator
 from bpy.app.handlers import persistent
 
 ON = True
-AUTO_BOUNDS = True
+AUTO_BOUNDS = False
 PREV_SCENES = {}
 PREV_SPACES = {}
 PREV_SYSTEM = {}

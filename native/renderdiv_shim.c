@@ -69,6 +69,18 @@ int blender_renderdiv_get(const char *name, char *value)
         value[1] = '\0';
         return 1;
     }
+    /* Desktop Blender's layout is scaled as well as the framebuffer.
+     * With 2x buffer reduction, upstream default 160 UI DPI appears too
+     * large on a narrow landscape phone. The Android port explicitly
+     * supports debug.blender.uidpi range 96..320; choose 96 for a compact
+     * layout without changing the device-wide display density. */
+    if (name != 0 && value != 0 &&
+        strcmp(name, "debug.blender.uidpi") == 0) {
+        value[0] = '9';
+        value[1] = '6';
+        value[2] = '\0';
+        return 2;
+    }
     /* Android Blender's own source uses this property to choose a
      * smaller swapchain on low-memory devices. Scope override to Blender. */
     if (name != 0 && value != 0 &&
