@@ -1,22 +1,19 @@
-# Blender Lite Android 11 — optional Mobile Performance profiles
+# Blender Android 11 — File Loading Stability Trial (not device-verified)
 
-This build is a conservative experiment based on the confirmed-starting Java compatibility release (run 7). The previous release stays available as a rollback option.
+The user confirmed that Android 11 can launch the upstream Blender Lite UI, but reported crashes when opening .blend or .glb files. This is a conservative mitigation, not a claim that the crash is fixed.
 
-Changes:
-- APK packaging is now verified by reading nested assets/blender_runtime.zip from the final signed APK and checking that the startup performance module is present and byte-for-byte identical to the tested source.
-- Include a single Python startup module in Blender's existing runtime payload: \`scripts/startup/mobile_speed.py\`.
-- On the blank default startup screen only, apply a balanced profile: FXAA, 2x anisotropic filtering, 1024 texture clamp, disable solid-view shadows and cavity (grid and tools remain).
-- On any 3D viewport, open **View → Mobile Performance** to choose **Fast** (disable viewport antialiasing, anisotropic filtering, extra shading and viewport floor grid) or restore original settings during the same running session.
-- Existing .blend files are not automatically modified. No geometry, actual render resolution, render quality, camera, or Blender binary code changes.
-- Keep original Vulkan and Android JNI libraries completely unchanged.
-- The APK retains the earlier Android 11 Java API-field correction.
+- Turn OFF GPU Subdivision by default in Blender Python preferences. CPU subdivision still works.
+- Restrict GPU texture preview uploads to 512 pixels by default to avoid some GPU memory exhaustion on Mali.
+- Disable the prior release's **automatic** Balanced viewport effect changes. The menu remains available manually.
+- Stop holding references to Blender viewport RNA objects through a .blend file reload.
+- Log file loading and process memory snapshots to \`Download/Blender/mobile-file-debug.log\` (if permitted) and Blender's normal \`Download/blender-startup.log\`.
+- Add **View → Mobile Performance → Write File Load Diagnostic** to mark the log before attempting file open.
+- No modification of Blender's C/C++ rendering libraries or user assets.
+- Android 11 Java API patch retained, upstream Blender APK SHA-256 pinned, test signature and ARM64 verified by GitHub Actions.
+- **CAUTION:** The test APK's signing certificate differs each build, so upgrading requires backing up projects and uninstalling the previous test package.
 
-Caveats:
-- **No physical Redmi Note 8 Pro benchmark or FPS measurement yet.** Some lag comes from CPU scheduling or Mali Vulkan shader compilation and may not be fixable with Python preferences.
-- The source APK's renderer **already** defaults to half-resolution buffers on devices with <6 GB RAM. We do not reduce the window further.
-- The temporary test signing certificate changes each CI run. Back up projects and preferences before uninstalling the older experimental APK. Installer cannot update older package without a matching signature.
-- If Python UI startup module fails, the core Blender engine remains unmodified, and the known-working prior release remains available.
+Use File > Open for .blend and File > Import > glTF 2.0 for .glb; for a small model where normal import still crashes, provide the last lines of the two log files, with private file paths removed.
 
-Source: https://github.com/simfeo/blender/tree/android-alpha-4
-Project source/patched packaging: https://github.com/mehmetdem2005/Cursor-deneme
-Upstream GPL-2.0-or-later.
+Both target file formats **remain unverified on Android 11** until real phone tests pass. Revert to run-7 or run-9 if this build has a regression.
+
+Details: docs/FILE_STABILITY.md

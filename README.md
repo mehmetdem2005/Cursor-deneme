@@ -1,6 +1,6 @@
-# Blender Lite — Android 11 compatibility + optional Mobile Performance
+# Blender Lite — Android 11 compatibility, Mobile Performance & file stability experiments
 
-**Latest build:** Includes an optional View → Mobile Performance profile selector. Balanced only applies to the blank default startup; choose Fast for speed or Restore for original settings in the current session. This is not a measured GPU optimization and does not modify native Blender rendering code. The confirmed-opening v7 release is preserved for rollback.
+**Latest build:** File loading stability experiment: GPU subdivision defaults off, viewport texture clamp 512, memory/load logging, no automatic viewport appearance changes. UI/file-loading fix not yet device-verified. Optional View → Mobile Performance profile selector remains. Balanced only applies to the blank default startup; choose Fast for speed or Restore for original settings in the current session. This is not a measured GPU optimization and does not modify native Blender rendering code. The confirmed-opening v7 release is preserved for rollback.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 
@@ -21,7 +21,7 @@ The original [simfeo/blender Android alpha 4](https://github.com/simfeo/blender/
 
 ## Build on GitHub
 
-Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-mobile-speed-EXPERIMENTAL.apk** and transfer to the Android phone.
+Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-file-stability-EXPERIMENTAL.apk** and transfer to the Android phone.
 
 The build validates the upstream SHA-256, changes the declared Android minimum from 31 to 30, reassembles and signs the package, checks for arm64 native libraries, verifies the signature, and confirms the declared minimum is 30. It is an **experimental repack**, not a native port to API 30.
 
@@ -45,3 +45,6 @@ Only step 1 is automated here. Steps 2–5 require a real Android 11 phone and r
 - The original APK is downloaded during CI, not committed to this repository.
 
 See [technical notes](docs/TECHNICAL.md) and [release caveats](docs/RELEASE_NOTES.md).
+
+
+See [file loading troubleshooting](docs/FILE_STABILITY.md) if opening .blend or glb quits unexpectedly.

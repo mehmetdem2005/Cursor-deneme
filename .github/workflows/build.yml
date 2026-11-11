@@ -1,4 +1,4 @@
-name: Blender Lite — Android 11 experimental APK
+name: Blender Lite — Android 11 file stability trial
 
 on:
   push:
@@ -64,14 +64,14 @@ jobs:
           BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
         run: |
           mkdir -p dist
-          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk
-          python3 scripts/verify_runtime.py dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk addon/mobile_speed.py
+          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk
+          python3 scripts/verify_runtime.py dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk addon/mobile_speed.py
 
       - name: Archive APK and diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-mobile-speed-EXPERIMENTAL
-          path: dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk
+          name: blender-lite-android11-file-stability-EXPERIMENTAL
+          path: dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk" \
+            "dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
             --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
