@@ -65,6 +65,10 @@ def _safe_system_prefs():
     # Lower maximum uploaded preview texture size before a heavy import.
     if hasattr(sys, 'gl_texture_limit'):
         _set_value(sys, 'gl_texture_limit', 'CLAMP_512')
+    # Mali-G76 / Android 11 Vulkan driver may corrupt or crash with MSAA.
+    # OFF disables viewport anti-aliasing without changing mesh/render data.
+    if hasattr(sys, 'viewport_aa'):
+        _set_value(sys, 'viewport_aa', 'OFF')
 
 
 @persistent

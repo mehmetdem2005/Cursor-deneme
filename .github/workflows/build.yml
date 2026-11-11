@@ -1,4 +1,4 @@
-name: Blender Lite — Android 11 file stability trial
+name: Blender Android 11 — half-resolution Mali Vulkan trial
 
 on:
   push:
@@ -41,10 +41,21 @@ jobs:
           "$SDK_MANAGER" --install "build-tools;35.0.0" "platforms;android-35"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_BUILD_TOOLS=$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_ENV"
+          NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit 2>/dev/null || true)"
+          if [ -z "$NDK_CLANG" ]; then
+            "$SDK_MANAGER" --install "ndk;28.2.13676358"
+            NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit)"
+          fi
+          test -n "$NDK_CLANG" && test -x "$NDK_CLANG"
+          echo "ANDROID_NDK_CLANG=$NDK_CLANG" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq patchelf
+          python3 -m pip install --user 'pyelftools==0.32'
+
 
       - name: Run compatibility patch tests
         run: |
-          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py scripts/verify_runtime.py addon/mobile_speed.py
+          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py scripts/verify_runtime.py scripts/patch_blender_elf.py addon/mobile_speed.py
           python3 -m unittest discover -s tests -v
 
       - name: Download real Blender Lite Android APK
@@ -75,14 +86,17 @@ jobs:
           BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
         run: |
           mkdir -p dist
-          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk
-          python3 scripts/verify_runtime.py dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk addon/mobile_speed.py
+          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
+          python3 scripts/verify_runtime.py dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk addon/mobile_speed.py
+          unzip -p dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk lib/arm64-v8a/libblender.so > /tmp/final-blender.so
+          unzip -p dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk lib/arm64-v8a/librenderdiv_shim.so > /tmp/final-shim.so
+          readelf -Ws /tmp/final-blender.so | grep -E 'blender_renderdiv_get
 
       - name: Archive APK and diagnostics
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-file-stability-EXPERIMENTAL
-          path: dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk
+          name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
+          path: dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -94,7 +108,54 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-file-stability-EXPERIMENTAL.apk" \
+            "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
+            --target "$GITHUB_SHA" \
+            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
+            --notes-file docs/RELEASE_NOTES.md --prerelease
+
+          readelf -d /tmp/final-blender.so | grep -F 'librenderdiv_shim.so'
+          readelf -Ws /tmp/final-shim.so | grep -E 'blender_renderdiv_get
+
+      - name: Archive APK and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
+          path: dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish clearly marked prerelease
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
+            --target "$GITHUB_SHA" \
+            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
+            --notes-file docs/RELEASE_NOTES.md --prerelease
+
+
+
+      - name: Archive APK and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
+          path: dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish clearly marked prerelease
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
             --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
