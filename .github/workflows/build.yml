@@ -1,4 +1,4 @@
-name: Blender Android 11 - armature safety diagnostics
+name: Blender Android 11 - native autosave every 3 minutes
 
 on:
   push:
@@ -78,7 +78,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p dist
           export ANDROID_BLENDER_RENDERDIV=1
-          APK=dist/blender-lite-android11-bone-safe-UNVERIFIED.apk
+          APK=dist/blender-lite-android11-autosave3-UNVERIFIED.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/mobile_speed.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -94,8 +94,8 @@ jobs:
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-bone-safe-UNVERIFIED
-          path: dist/blender-lite-android11-bone-safe-UNVERIFIED.apk
+          name: blender-lite-android11-autosave3-UNVERIFIED
+          path: dist/blender-lite-android11-autosave3-UNVERIFIED.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -106,7 +106,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-bone-safe-UNVERIFIED.apk" \
+            "dist/blender-lite-android11-autosave3-UNVERIFIED.apk" \
             --target "$GITHUB_SHA" \
-            --title "Blender Android 11 half-resolution Mali test $GITHUB_RUN_NUMBER (unverified)" \
+            --title "Blender Android 11 3-minute crash recovery $GITHUB_RUN_NUMBER (unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

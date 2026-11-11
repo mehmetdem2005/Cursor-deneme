@@ -1,6 +1,6 @@
 # Blender for Android 11 — experimental GLB import and Mali graphics profiles
 
-**Latest build:** Adds File > Import GLB / GLTF... (correct Blender importer instead of File > Open) and optional View > Mobile Performance > Mali Safe flat-shading mode for old Mali Vulkan artifacts. Both paths need real-device testing; no GPU/format compatibility guarantee.
+**Latest build:** Native 3-minute Auto Save recovery is enabled at every startup; File menu provides Recover Auto Save. Existing Blender Lite Android 11/Bone Safe features remain. IMPORTANT: Blender's Auto Save does not guarantee that unfinished Edit Mode bone changes are preserved; manually save `.blend` after critical rig steps.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 

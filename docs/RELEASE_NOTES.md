@@ -1,26 +1,23 @@
-# Blender Android 11 — armature bone edit crash diagnostics (experimental)
+# Blender Android 11 — native three-minute crash recovery (experimental)
 
-**Observed on the Redmi Note 8 Pro:** Rig editing began to crash after adding several bones; deletion of bones beyond roughly the fifth caused an immediate application exit. Five bones are trivially small relative to normal Blender armatures. This is not an established memory-capacity threshold. Exact fault (armature data, undo, GPU buffer allocation or Android Vulkan driver) requires the phone crash log and an independent empty-scene reproduction.
+User request: Automatically save work every three minutes, after reported crashes while adding/deleting bones and importing GLBs.
 
-Source review:
-- Upstream Blender's Overlay Armature engine draws bone styles through distinct GPU paths (OCTAHEDRAL, STICK, WIRE, etc.), so an opt-in STICK display trial is valuable.
-- Blender's issue tracker includes crashes in bone deletion/selection/adding, including #140636, #151082 and #164168, but those issues do NOT prove the current alpha-4 contains the same bug. Several were fixed upstream.
-- Mali-G76 on Android 11 is outside the original port's Android 12+ support and has known stray Vulkan triangles.
+Implemented using **Blender's own native Auto Save Temporary Files**:
+- At addon registration/startup, enable \`bpy.context.preferences.filepaths.use_auto_save_temporary_files=True\`.
+- Set \`bpy.context.preferences.filepaths.auto_save_time=3\` (minutes).
+- Retain at least two manual Save Versions (using \`save_version >= 2\`), so ordinary saves provide .blend1 and .blend2 backups.
+- On loading another .blend file, reassert native autosave settings.
+- File menu includes **Recover Auto Save...**, which uses Blender's own \`wm.recover_auto_save\` file picker.
+- No custom Python save timer, no periodic \`bpy.ops.wm.save_as_mainfile\`, no silent overwriting current .blend, no forced mode switches, and no new GPU draw work.
 
-New **View > Mobile Performance** menu items:
-1. **Bone Safe: Stick (lightweight)** uses stick/line representation for the selected armature, hiding bone names only. The imported mesh remains visible.
-2. **Bone Safe: Isolate Mesh (bounds)** also renders armature-bound mesh objects as lightweight bounding boxes. This isolates Blender's armature edit path from expensive mesh overlay/draw operations, but removes surface detail until restored.
-3. **Bone Safe: OFF / Restore** restores previous armature and mesh viewport display settings.
+**IMPORTANT RIGGING LIMITATION:** Blender's Python API explicitly warns that Edit and Sculpt mode data may not be captured in native temporary Auto Save files. Do not assume a bone currently being moved/added/deleted is fully preserved. Users doing rigging should manually save after meaningful editing milestones and before risky bone deletion. The three-minute interval is a recovery target, not a guarantee of exactly 180 seconds on a frozen/crashed Android device or during modal operations. Temp files may disappear if Android clears the app cache, on reinstall, or if the process has not reached its first autosave.
 
-The mode logs **BONE_COUNT_EDIT_N** / **BONE_COUNT_POSE_N** only when counts/modes change, by a 0.75-second timer. Nothing scans every vertex and no bone is added/deleted automatically. Original UI/display settings are restored before a .blend save and reapplied after saving, and cleared before opening a new .blend. The log is attempted at \`Download/Blender/mobile-file-debug.log\`, plus upstream console output.
+**Recovery:** Open Blender > File > Recover Auto Save..., choose most recent timestamped autosave, and immediately Save As to a safe new file in shared storage. Back up important projects externally before uninstalling/upgrading an APK with a new CI test signature.
 
-**No guarantee the native crash is fixed.** If it also crashes on a brand-new empty scene with 6+ bones, collect a device error trace (SIGSEGV, Vulkan error, armature edit operator) and consider rebuilding the native engine with the corresponding upstream fix. If it only happens with the GLB, the skinned mesh dependency / GPU workload is more suspect.
+All existing Android 11, Mali graphics, GLB guard, Bone Safe, Rig Lite and depth test changes remain. This is a backup safety addition, **not a fix** for the underlying bone/Vulkan native crash.
 
-Quick isolation steps:
-- Fresh Blender startup, add Armature without any GLB, go Edit Mode, extrude 7 bones; delete the latest one.
-- Import only the known working mouse GLB in a new scene, select the armature and enable Bone Safe: Stick, repeat.
-- If still crashes, enable Bone Safe: Isolate Mesh and repeat.
-- Back up projects before reinstall; CI uses per-run test signing keys.
-- If no mode stabilizes, the native crash trace is required; do not blindly optimize rig data or alter bones.
+Verification: Source and packaging tests verify settings and presence of the recovery operator. GitHub cannot demonstrate that Android permissions, temp directory persistence or actual recovery after a crash work on the physical phone.
 
-GitHub CI only validates Python/ELF packaging, not real-device bone editing. Previous run-20 full framebuffer and run-19 reduced framebuffer are kept for rollback.
+Sources:
+- https://docs.blender.org/api/5.2/bpy.types.PreferencesFilePaths.html
+- https://docs.blender.org/manual/en/latest/troubleshooting/recover.html
