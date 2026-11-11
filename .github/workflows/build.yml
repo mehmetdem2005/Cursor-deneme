@@ -1,4 +1,4 @@
-name: Blender Android 11 — half-resolution Mali Vulkan trial
+name: Blender Android 11 - Mali half-resolution experimental APK
 
 on:
   push:
@@ -9,11 +9,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: android11-experimental-main
+  group: blender-android11-main
   cancel-in-progress: false
 
 jobs:
-  package:
+  build:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -32,33 +32,34 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android build tools
+      - name: Install Android SDK, NDK and ELF tools
         shell: bash
         run: |
+          set -Eeuo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           SDK_MANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
           test -n "$SDK_MANAGER" && test -x "$SDK_MANAGER"
           "$SDK_MANAGER" --install "build-tools;35.0.0" "platforms;android-35"
-          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_BUILD_TOOLS=$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_ENV"
           NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit 2>/dev/null || true)"
           if [ -z "$NDK_CLANG" ]; then
             "$SDK_MANAGER" --install "ndk;28.2.13676358"
             NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit)"
           fi
           test -n "$NDK_CLANG" && test -x "$NDK_CLANG"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_BUILD_TOOLS=$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_CLANG=$NDK_CLANG" >> "$GITHUB_ENV"
           sudo apt-get update -qq
           sudo apt-get install -y -qq patchelf
-          python3 -m pip install --user 'pyelftools==0.32'
+          python3 -m pip install --user "pyelftools==0.32"
 
-
-      - name: Run compatibility patch tests
+      - name: Run compatibility tests
+        shell: bash
         run: |
-          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py scripts/verify_runtime.py scripts/patch_blender_elf.py addon/mobile_speed.py
+          python3 -m py_compile scripts/*.py addon/mobile_speed.py
           python3 -m unittest discover -s tests -v
 
-      - name: Download real Blender Lite Android APK
+      - name: Download pinned real Blender Lite APK
         shell: bash
         run: |
           curl -fLSs --retry 5 --retry-delay 4 "$UPSTREAM_URL" -o upstream.apk
@@ -66,18 +67,7 @@ jobs:
           curl -fLSs --retry 5 --retry-delay 4 "$APKTOOL_URL" -o apktool.jar
           java -jar apktool.jar --version
 
-      - name: Inspect native render scale symbols (diagnostic)
-        shell: bash
-        run: |
-          unzip -p upstream.apk lib/arm64-v8a/libblender.so > /tmp/libblender.so
-          ls -lh /tmp/libblender.so
-          file /tmp/libblender.so
-          readelf -Ws /tmp/libblender.so | grep -E 'GHOST_android_render_scale_divisor|GHOST_android_is_low_memory_device|__system_property_get|ANativeWindow_setBuffersGeometry' | head -n 30 || true
-          if command -v llvm-objdump >/dev/null; then
-            llvm-objdump --syms /tmp/libblender.so | grep -E 'GHOST_android_render_scale_divisor|GHOST_android_is_low_memory_device' | head || true
-          fi
-
-      - name: Repack, sign and verify Android-11 experiment
+      - name: Build, sign and verify experimental APK
         shell: bash
         env:
           BLENDER_SIGNING_KEYSTORE_BASE64: ${{ secrets.BLENDER_SIGNING_KEYSTORE_BASE64 }}
@@ -85,14 +75,19 @@ jobs:
           BLENDER_KEY_ALIAS: ${{ secrets.BLENDER_KEY_ALIAS }}
           BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
         run: |
+          set -Eeuo pipefail
           mkdir -p dist
-          bash scripts/repack.sh upstream.apk dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
-          python3 scripts/verify_runtime.py dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk addon/mobile_speed.py
-          unzip -p dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk lib/arm64-v8a/libblender.so > /tmp/final-blender.so
-          unzip -p dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk lib/arm64-v8a/librenderdiv_shim.so > /tmp/final-shim.so
-          readelf -Ws /tmp/final-blender.so | grep -E 'blender_renderdiv_get
+          APK=dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
+          bash scripts/repack.sh upstream.apk "$APK"
+          python3 scripts/verify_runtime.py "$APK" addon/mobile_speed.py
+          unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
+          unzip -p "$APK" lib/arm64-v8a/librenderdiv_shim.so > /tmp/final-shim.so
+          readelf -Ws /tmp/final-blender.so | grep -F blender_renderdiv_get
+          readelf -d /tmp/final-blender.so | grep -F librenderdiv_shim.so
+          readelf -Ws /tmp/final-shim.so | grep -F blender_renderdiv_get
+          echo "Native helper and ELF import are present in signed APK. Device execution remains unverified."
 
-      - name: Archive APK and diagnostics
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
@@ -101,8 +96,7 @@ jobs:
           compression-level: 0
           retention-days: 14
 
-      - name: Publish clearly marked prerelease
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      - name: Publish experimental GitHub prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -110,52 +104,5 @@ jobs:
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
             "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
-            --notes-file docs/RELEASE_NOTES.md --prerelease
-
-          readelf -d /tmp/final-blender.so | grep -F 'librenderdiv_shim.so'
-          readelf -Ws /tmp/final-shim.so | grep -E 'blender_renderdiv_get
-
-      - name: Archive APK and diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
-          path: dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
-      - name: Publish clearly marked prerelease
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
-            --target "$GITHUB_SHA" \
-            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
-            --notes-file docs/RELEASE_NOTES.md --prerelease
-
-
-
-      - name: Archive APK and diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: blender-lite-android11-renderdiv2-mali-EXPERIMENTAL
-          path: dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
-      - name: Publish clearly marked prerelease
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-renderdiv2-mali-EXPERIMENTAL.apk" \
-            --target "$GITHUB_SHA" \
-            --title "Blender Lite Android 11 — UNVERIFIED experimental build $GITHUB_RUN_NUMBER" \
+            --title "Blender Android 11 half-resolution Mali test $GITHUB_RUN_NUMBER (unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
