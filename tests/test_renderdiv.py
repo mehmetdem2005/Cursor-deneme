@@ -21,11 +21,9 @@ class RenderDivShimTests(unittest.TestCase):
 
     def test_idle_poll_preserves_normal_timeouts(self):
         s = Path("native/renderdiv_shim.c").read_text()
-        self.assertIn("if (timeoutMillis == 0)", s)
-        self.assertIn("int effective = timeoutMillis;", s)
-        self.assertIn("effective = now - last_event_ms < 800 ? 10 : 24;", s)
-        self.assertIn("ALooper_pollOnce(effective, outFd, outEvents, outData)", s)
-        self.assertIn("static _Thread_local uint64_t last_event_ms;", s)
+        self.assertIn("return ALooper_pollOnce(timeoutMillis, outFd, outEvents, outData);", s)
+        self.assertNotIn("last_event_ms", s)
+        self.assertNotIn("int effective = timeoutMillis;", s)
 
 
 if __name__ == "__main__":

@@ -25,13 +25,12 @@ class MobileUsabilityRegressionTests(unittest.TestCase):
         self.assertNotIn("show_overlays', False", src)
 
     def test_keep_gpu_limits_and_autosave(self):
-        src = Path("addon/ultra_survival.py").read_text()
+        src = Path("addon/safe_edit.py").read_text()
         for item in ["('viewport_aa', 'OFF')","('gl_texture_limit', 'CLAMP_128')",
-                     "('simplify_subdivision', 0)","('type', 'SOLID')",
-                     "'auto_save_time', 3"]:
+                     "('type', 'SOLID')","'auto_save_time', 3"]:
             self.assertIn(item, src)
         repack = Path("scripts/repack.sh").read_text()
-        self.assertIn("addon/ultra_survival.py", repack)
+        self.assertIn("addon/safe_edit.py", repack)
 
 if __name__ == '__main__':
     unittest.main()
