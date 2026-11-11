@@ -10,6 +10,13 @@
 #include <sys/system_properties.h>
 #include <time.h>
 
+#ifndef MOBILE_RENDER_DIVISOR
+#define MOBILE_RENDER_DIVISOR 2
+#endif
+#if MOBILE_RENDER_DIVISOR != 1 && MOBILE_RENDER_DIVISOR != 2
+#error MOBILE_RENDER_DIVISOR must be 1 or 2
+#endif
+
 static _Thread_local uint64_t last_event_ms;
 
 static uint64_t clock_ms(void)
@@ -51,6 +58,9 @@ int blender_renderdiv_get(const char *name, char *value)
 {
     if (name != 0 && value != 0 && strcmp(name, "debug.blender.renderdiv") == 0) {
         value[0] = '2';
+#if MOBILE_RENDER_DIVISOR == 1
+        value[0] = '1';
+#endif
         value[1] = '\0';
         return 1;
     }

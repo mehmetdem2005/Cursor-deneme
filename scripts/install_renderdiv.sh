@@ -8,9 +8,14 @@ blender="$libdir/libblender.so"
 shim="$libdir/librenderdiv_shim.so"
 test -f "$blender"
 test -x "$clang"
+render_div="${ANDROID_BLENDER_RENDERDIV:-2}"
+if [[ "$render_div" != "1" && "$render_div" != "2" ]]; then
+  echo "Invalid renderdiv; use 1 or 2" >&2
+  exit 1
+fi
 command -v patchelf >/dev/null
 python3 scripts/patch_blender_elf.py "$blender"
-"$clang" -std=c11 -shared -O2 -fPIC -fvisibility=hidden \
+"$clang" -std=c11 -DMOBILE_RENDER_DIVISOR="$render_div" -shared -O2 -fPIC -fvisibility=hidden \
   -Wl,--no-undefined -Wl,-soname,librenderdiv_shim.so \
   -o "$shim" native/renderdiv_shim.c -landroid
 patchelf --add-needed librenderdiv_shim.so "$blender"
@@ -24,4 +29,4 @@ if readelf -Ws "$blender" | grep -E '__system_property_get@|ALooper_pollOnce@'; 
   echo "Original imported symbol still exists" >&2
   exit 1
 fi
-echo "Validated renderdiv2 and Android adaptive-idle shim."
+echo "Validated renderdiv=$render_div and Android adaptive-idle shim."
