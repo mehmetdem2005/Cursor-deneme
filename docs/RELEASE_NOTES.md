@@ -1,24 +1,26 @@
-# Blender 5.3 Lite / Android 11: experimental 50%-per-axis render buffers
+# Android 11 GLB importer shortcut + Mali Safe viewport (experimental)
 
-Target: Redmi Note 8 Pro, 8 GB RAM, Mali-G76 MC4, Android 11.
+Device: Redmi Note 8 Pro, Android 11, 8 GB RAM, Mali-G76 MC4.
 
-This variant attempts to force the upstream Blender's `GHOST_android_render_scale_divisor() = 2` behavior even when 8 GB of physical RAM prevents the source's low-memory auto-trigger.
+## GLB is not a .blend
 
-### What changes
+The reported error reads "File format is not supported in file ... .glb". Blender's **File > Open** is the .blend project reader. It must not open glTF as if it were .blend. The correct menu is **File > Import > glTF 2.0 (.glb/.gltf)**.
 
-- Add `librenderdiv_shim.so`, a tiny ARM64 native library with one purpose: report `2` **only** for Blender's `debug.blender.renderdiv` query. Every other property request goes to Android unchanged.
-- Redirect the single imported `__system_property_get` ELF dynamic symbol in the exact pinned `libblender.so` to `blender_renderdiv_get`, and add a direct native dependency on the shim. The rest of the native Blender image remains unmodified (except ELF relocation metadata adjusted by patchelf).
-- Blender's existing window and touch code remains in control. It sets Android window buffers to width/2 x height/2, and scales touch input. Pixel processing is 25% of native resolution **if the shim is honored by this binary**. This is NOT a promise of 4x FPS; neither memory nor geometry is reduced 75%.
-- Force viewport anti-aliasing OFF at startup to avoid a reported Vulkan+MSAA Mali-G76 driver issue.
-- Retain previously working Android 11 activity compatibility and native Blender runtime.
-- Test ABI, APK signing, ELF import and helper dependency in CI.
+This build adds **File > Import GLB / GLTF...** at the top of the File menu, which calls the official Blender \`bpy.ops.import_scene.gltf('INVOKE_DEFAULT')\` file picker and avoids the .blend-file reader. No format conversion, replacement engine or external viewer is involved. If the official glTF add-on has not registered, the shortcut attempts to enable the bundled \`io_scene_gltf2\` module. This does not guarantee all compressed GLB files load: Lite omits support for some Draco/meshopt compressed meshes. Uncompressed GLB is the first test.
 
-### Safety / rollback
+## Viewport glitch trial
 
-**Experimental. This has NOT been run on the target phone.** Native ELF symbol redirection may fail to load on some Android firmware. If startup crashes or the UI misbehaves, go back to run-10. Do not erase projects or format the phone.
+The previous experimental release forces half-width/half-height Vulkan buffers on 8 GB RAM devices. This reduces buffer pixels by ~75% but **may** reveal Mali driver or scaling artifacts when orbiting/zooming. This build retains that setup, but adds optional **View > Mobile Performance > Mali Safe (graphics glitches)** to turn off viewport anti-aliasing, shadows, cavity, highlights and grid, using flat lighting. The user can choose Restore in the same session. These changes do not remove meshes or change saved model coordinates. **This is a diagnostic/mild workaround, not a tested driver fix.**
 
-GitHub CI uses an ephemeral signing key. Before uninstalling an old build, **back up all .blend/.glb files outside app storage**.
+The original Blender Lite renderer is Vulkan-only. A true GPU driver fix requires source-level Vulkan work or a different driver / GPU API path, not a Python UI option.
 
-Known driver issue documentation: https://forums.unrealengine.com/t/artifacts-and-crashes-on-some-android-gpus-and-versions-when-vulkan-is-enabled/2536208
+## Release caution
 
-Upstream sources: https://github.com/simfeo/blender/tree/android-alpha-4
+- This is an experimental APK, not yet tested on the user's device.
+- Prior working app/SDK compatibility and file stability guards retained.
+- CI checks that the GLB shortcut and Mali safe mode are present in the signed APK, along with APK signature, native shim linkage, arm64 ABI.
+- Back up .blend and .glb outside app data before uninstalling older test APKs. Each run uses a new signing key, so updates may require uninstall.
+- If zoom distortion persists, compare with the previous full-buffer release (run-10) to distinguish render-scale effects from native Mali driver bugs; prior APKs are preserved.
+- If importing via the new shortcut shows another error or closes Blender, attach \`Download/blender-startup.log\`, or upload the actual GLB for compression/structure inspection.
+
+Source: https://github.com/simfeo/blender/tree/android-alpha-4

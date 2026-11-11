@@ -1,6 +1,6 @@
-# Blender Lite — Android 11 compatibility, Mobile Performance & file stability experiments
+# Blender for Android 11 — experimental GLB import and Mali graphics profiles
 
-**Latest build:** File loading stability experiment: GPU subdivision defaults off, viewport texture clamp 512, memory/load logging, no automatic viewport appearance changes. UI/file-loading fix not yet device-verified. Optional View → Mobile Performance profile selector remains. Balanced only applies to the blank default startup; choose Fast for speed or Restore for original settings in the current session. This is not a measured GPU optimization and does not modify native Blender rendering code. The confirmed-opening v7 release is preserved for rollback.
+**Latest build:** Adds File > Import GLB / GLTF... (correct Blender importer instead of File > Open) and optional View > Mobile Performance > Mali Safe flat-shading mode for old Mali Vulkan artifacts. Both paths need real-device testing; no GPU/format compatibility guarantee.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 
@@ -48,3 +48,6 @@ See [technical notes](docs/TECHNICAL.md) and [release caveats](docs/RELEASE_NOTE
 
 
 See [file loading troubleshooting](docs/FILE_STABILITY.md) if opening .blend or glb quits unexpectedly.
+
+
+**GLB support:** File → Import GLB / GLTF… or File → Import → glTF 2.0, not File → Open (that reads .blend). For graphics anomalies, try View → Mobile Performance → Mali Safe and compare with the previous run-10 APK. More details in [release notes](docs/RELEASE_NOTES.md).

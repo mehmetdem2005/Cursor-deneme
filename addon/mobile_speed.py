@@ -13,6 +13,7 @@ _previous_system = None
 _previous_spaces = {}
 _menu_installed = False
 _auto_applied = False
+_file_import_installed = False
 
 
 
@@ -162,10 +163,11 @@ def _apply_profile(profile, spaces):
         _set_value(system, 'viewport_aa', 'FXAA')
         _set_value(system, 'anisotropic_filter', 'FILTER_2')
         _set_value(system, 'gl_texture_limit', 'CLAMP_512')
-    elif profile == 'FAST':
+    elif profile in {'FAST', 'MALI_SAFE'}:
         _set_value(system, 'viewport_aa', 'OFF')
         _set_value(system, 'anisotropic_filter', 'FILTER_0')
-        _set_value(system, 'gl_texture_limit', 'CLAMP_256')
+        _set_value(system, 'gl_texture_limit',
+                   'CLAMP_512' if profile == 'MALI_SAFE' else 'CLAMP_256')
 
     for space in spaces:
         if space.type != 'VIEW_3D':
@@ -174,11 +176,17 @@ def _apply_profile(profile, spaces):
         if space.shading.type == 'SOLID':
             _set_value(space.shading, 'show_shadows', False)
             _set_value(space.shading, 'show_cavity', False)
-            if profile == 'FAST':
+            if profile in {'FAST', 'MALI_SAFE'}:
                 _set_value(space.shading, 'show_specular_highlight', False)
-                # Hide the background grid, not the outlines or editing tools.
+                # Hide grid only, not mesh outlines or editing tools.
                 _set_value(space.overlay, 'show_floor', False)
                 _set_value(space.overlay, 'show_ortho_grid', False)
+            if profile == 'MALI_SAFE':
+                # Flat light avoids heavier studio-light shading paths.
+                # This can lessen artifacts but cannot repair a broken Vulkan driver.
+                _set_value(space.shading, 'light', 'FLAT')
+                _set_value(space.overlay, 'show_axis_x', False)
+                _set_value(space.overlay, 'show_axis_y', False)
 
     print("[MobileSpeed] Profile applied:", profile)
 
@@ -214,6 +222,7 @@ class WM_OT_mobile_speed(Operator):
     profile: bpy.props.EnumProperty(items=[
         ('BALANCED', 'Balanced', 'Keep grid and editing tools; reduce AA and shadows'),
         ('FAST', 'Fast', 'Disable viewport AA, shading extras and floor grid'),
+        ('MALI_SAFE', 'Mali Safe', 'Reduce costly lighting and grid passes on Mali Vulkan'),
         ('RESTORE', 'Restore', 'Restore the settings from before Mobile Speed was used'),
     ])
 
@@ -233,6 +242,38 @@ class WM_OT_mobile_speed(Operator):
             return {'CANCELLED'}
         return {'FINISHED'}
 
+
+
+
+class WM_OT_mobile_import_gltf(Operator):
+    bl_idname = 'wm.mobile_import_gltf'
+    bl_label = 'Import GLB / GLTF'
+    bl_description = 'Import glTF 2.0 into the current scene; File > Open is only for .blend projects'
+    bl_options = {'REGISTER'}
+
+    def invoke(self, context, event):
+        # Blender 5.3 ships the official glTF importer; the operator may be
+        # disabled if the corresponding bundled add-on has not registered yet.
+        try:
+            if 'gltf' not in dir(bpy.ops.import_scene):
+                import addon_utils
+                addon_utils.enable('io_scene_gltf2', default_set=False)
+            _diagnostic('GLTF_IMPORT_DIALOG')
+            return bpy.ops.import_scene.gltf('INVOKE_DEFAULT')
+        except (RuntimeError, AttributeError, ImportError, TypeError) as exc:
+            self.report({'ERROR'}, 'glTF importer unavailable: ' + str(exc))
+            _diagnostic('GLTF_IMPORT_ERROR')
+            return {'CANCELLED'}
+
+    def execute(self, context):
+        # The menu normally invokes the file chooser. Keep this as a safe
+        # fallback for Blender's EXEC operator context.
+        return self.invoke(context, None)
+
+
+def _draw_mobile_glb_import(self, context):
+    self.layout.operator_context = 'INVOKE_AREA'
+    self.layout.operator('wm.mobile_import_gltf', text='Import GLB / GLTF...', icon='IMPORT')
 
 
 class WM_OT_mobile_file_diagnostics(Operator):
@@ -256,6 +297,7 @@ class VIEW3D_MT_mobile_speed(Menu):
         for label, profile in (
             ('Balanced (clearer)', 'BALANCED'),
             ('Fast (higher FPS)', 'FAST'),
+            ('Mali Safe (graphics glitches)', 'MALI_SAFE'),
             ('Restore previous settings', 'RESTORE'),
         ):
             op = layout.operator('wm.mobile_speed', text=label)
@@ -270,7 +312,7 @@ def _draw_entry(self, context):
 
 
 def _install_menu_when_ready():
-    global _menu_installed, _auto_applied
+    global _menu_installed, _file_import_installed, _auto_applied
     if bpy.app.background:
         return None
     if not hasattr(bpy.types, 'VIEW3D_MT_view'):
@@ -278,6 +320,10 @@ def _install_menu_when_ready():
     if not _menu_installed:
         bpy.types.VIEW3D_MT_view.append(_draw_entry)
         _menu_installed = True
+    if not _file_import_installed and hasattr(bpy.types, 'TOPBAR_MT_file'):
+        # File > Open attempts to read .blend and will reject .glb.
+        bpy.types.TOPBAR_MT_file.prepend(_draw_mobile_glb_import)
+        _file_import_installed = True
 
     # Stability release: performance profiles are opt-in, to avoid any
     # possibility of a stale viewport RNA reference during a file load.
@@ -289,6 +335,7 @@ def register():
     bpy.utils.register_class(WM_OT_mobile_speed)
     bpy.utils.register_class(VIEW3D_MT_mobile_speed)
     bpy.utils.register_class(WM_OT_mobile_file_diagnostics)
+    bpy.utils.register_class(WM_OT_mobile_import_gltf)
     _safe_system_prefs()
     _diagnostic('STABILITY_PROTECTION_ENABLED')
     for handler, callback in ((bpy.app.handlers.load_pre, _mobile_load_pre),
@@ -301,7 +348,7 @@ def register():
 
 
 def unregister():
-    global _menu_installed, _auto_applied
+    global _menu_installed, _file_import_installed, _auto_applied
     if bpy.app.timers.is_registered(_install_menu_when_ready):
         bpy.app.timers.unregister(_install_menu_when_ready)
     if bpy.app.timers.is_registered(_memory_heartbeat):
@@ -312,9 +359,13 @@ def unregister():
             handler.remove(callback)
     if _menu_installed and hasattr(bpy.types, 'VIEW3D_MT_view'):
         bpy.types.VIEW3D_MT_view.remove(_draw_entry)
+    if _file_import_installed and hasattr(bpy.types, 'TOPBAR_MT_file'):
+        bpy.types.TOPBAR_MT_file.remove(_draw_mobile_glb_import)
+    _file_import_installed = False
     _menu_installed = False
     _auto_applied = False
     _restore()
+    bpy.utils.unregister_class(WM_OT_mobile_import_gltf)
     bpy.utils.unregister_class(WM_OT_mobile_file_diagnostics)
     bpy.utils.unregister_class(VIEW3D_MT_mobile_speed)
     bpy.utils.unregister_class(WM_OT_mobile_speed)
