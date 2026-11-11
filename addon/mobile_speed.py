@@ -893,7 +893,7 @@ class VIEW3D_MT_mobile_speed(Menu):
         layout.separator()
         b1 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: Stick (lightweight)', icon='ARMATURE_DATA')
         b1.mode = 'STICK'
-        b2 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: Isolate Mesh (bounds)', icon='BBOX')
+        b2 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: Isolate Mesh (bounds)', icon='SHADING_BBOX')
         b2.mode = 'ISOLATE'
         b3 = layout.operator('wm.mobile_bone_safety', text='Bone Safe: OFF / Restore', icon='CANCEL')
         b3.mode = 'OFF'
