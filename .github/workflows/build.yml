@@ -55,6 +55,17 @@ jobs:
           curl -fLSs --retry 5 --retry-delay 4 "$APKTOOL_URL" -o apktool.jar
           java -jar apktool.jar --version
 
+      - name: Inspect native render scale symbols (diagnostic)
+        shell: bash
+        run: |
+          unzip -p upstream.apk lib/arm64-v8a/libblender.so > /tmp/libblender.so
+          ls -lh /tmp/libblender.so
+          file /tmp/libblender.so
+          readelf -Ws /tmp/libblender.so | grep -E 'GHOST_android_render_scale_divisor|GHOST_android_is_low_memory_device|__system_property_get|ANativeWindow_setBuffersGeometry' | head -n 30 || true
+          if command -v llvm-objdump >/dev/null; then
+            llvm-objdump --syms /tmp/libblender.so | grep -E 'GHOST_android_render_scale_divisor|GHOST_android_is_low_memory_device' | head || true
+          fi
+
       - name: Repack, sign and verify Android-11 experiment
         shell: bash
         env:
