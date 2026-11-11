@@ -44,7 +44,7 @@ jobs:
 
       - name: Run compatibility patch tests
         run: |
-          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py addon/mobile_speed.py
+          python3 -m py_compile scripts/patch_sdk.py scripts/patch_compat.py scripts/patch_runtime.py scripts/verify_runtime.py addon/mobile_speed.py
           python3 -m unittest discover -s tests -v
 
       - name: Download real Blender Lite Android APK
@@ -65,6 +65,7 @@ jobs:
         run: |
           mkdir -p dist
           bash scripts/repack.sh upstream.apk dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk
+          python3 scripts/verify_runtime.py dist/blender-lite-android11-mobile-speed-EXPERIMENTAL.apk addon/mobile_speed.py
 
       - name: Archive APK and diagnostics
         uses: actions/upload-artifact@v4

@@ -3,6 +3,7 @@
 This build is a conservative experiment based on the confirmed-starting Java compatibility release (run 7). The previous release stays available as a rollback option.
 
 Changes:
+- APK packaging is now verified by reading nested assets/blender_runtime.zip from the final signed APK and checking that the startup performance module is present and byte-for-byte identical to the tested source.
 - Include a single Python startup module in Blender's existing runtime payload: \`scripts/startup/mobile_speed.py\`.
 - On the blank default startup screen only, apply a balanced profile: FXAA, 2x anisotropic filtering, 1024 texture clamp, disable solid-view shadows and cavity (grid and tools remain).
 - On any 3D viewport, open **View → Mobile Performance** to choose **Fast** (disable viewport antialiasing, anisotropic filtering, extra shading and viewport floor grid) or restore original settings during the same running session.
