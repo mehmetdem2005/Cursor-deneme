@@ -1,4 +1,4 @@
-name: Blender Android 11 - SAFE EDIT crash isolation
+name: Blender Android 11 - v32 Texture Paint Guard
 
 on:
   push:
@@ -91,11 +91,30 @@ jobs:
           readelf -d /tmp/final-shim.so | grep -F libandroid.so
           echo "Native helper and ELF import are present in signed APK. Device execution remains unverified."
 
+      - name: Verify preserved v31 APK and assemble dual-APK ZIP
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist/original
+          gh release download android11-exp-run-31 \
+            --repo "${{ github.repository }}" \
+            --pattern blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            --dir dist/original
+          python3 scripts/package_dual_apk.py \
+            dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-v32-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v32-APKs.zip | tail -1
+
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-android11-SAFE-EDIT-EXPERIMENTAL
-          path: dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+          name: blender-lite-v32-PAINT-GUARD-APK-and-ZIP
+          path: |
+            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-v32-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -107,6 +126,7 @@ jobs:
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
             "dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-v32-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Android 11 Safe Edit no mode hooks $GITHUB_RUN_NUMBER (unverified)" \
+            --title "Blender Lite v32 Paint Guard + v31 original (device-unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

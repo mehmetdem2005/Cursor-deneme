@@ -1,6 +1,6 @@
 # Blender for Android 11 — experimental GLB import and Mali graphics profiles
 
-**Latest build:** Ultra Rig Survival edition: native framebuffer divisor 4 (1/16 full pixels), lowmem mode, flat Solid preview, 128px texture cap and disabled expensive viewport effects; three-minute Auto Save retained. Rig/Weight Paint UI remains available. Android device crashes are not guaranteed fixed.
+**Latest build:** v32 Paint Guard, an experimental one-shot Texture Paint preflight with a reversible Solid/Flat viewport, manual Safe Texture Preview and diagnostic markers. Built from the existing v31 Safe Edit profile; NOT a tested native Vulkan fix. Old v31 preserved in the separate `android11-exp-run-31` GitHub Release. The v32 GitHub Release also contains a SHA-256-verified dual-APK ZIP.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 
