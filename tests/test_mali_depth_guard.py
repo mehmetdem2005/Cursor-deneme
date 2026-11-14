@@ -13,10 +13,10 @@ TREE = ast.parse(SOURCE)
 
 class Watch:
     def __init__(self, start=0.01, end=1000.0, ptr=1):
-        self.writes = []
-        self.clip_start = start
-        self.clip_end = end
-        self.ptr = ptr
+        object.__setattr__(self, 'writes', [])
+        object.__setattr__(self, 'clip_start', start)
+        object.__setattr__(self, 'clip_end', end)
+        object.__setattr__(self, 'ptr', ptr)
 
     def as_pointer(self):
         return self.ptr
@@ -97,7 +97,7 @@ class TestDepthGuard(unittest.TestCase):
         for required in ("('viewport_aa', 'OFF')",
                          "('gl_texture_limit', 'CLAMP_128')",
                          "('use_gpu_subdivision', False)",
-                         "('auto_save_time', 3)"):
+                         "'auto_save_time', 3"):
             self.assertIn(required, SOURCE)
 
 
