@@ -6,19 +6,20 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_STORED
 
 OLD_NAME = 'Blender-Lite-v31-ORIGINAL.apk'
-NEW_NAME = 'Blender-Lite-v32-PAINT-GUARD.apk'
+NEW_NAME = 'Blender-Lite-v33-MALI-DEPTH-GUARD.apk'
 OLD_SHA256 = 'c0a345b6496a903228932b6dd3425ffdbdf21a7d25b169996c3bd3e4a938f31b'
 OLD_SIZE = 203146975
 
 NOTES = """Blender Lite Android 11 experimental
 
 v31 Original: preserved byte-for-byte from android11-exp-run-31.
-v32 Paint Guard: one-shot Texture Paint preparation, manual Solid texture
-preview, and non-sensitive diagnostic markers. No native Vulkan engine fix.
+v33 Mali Depth Guard: inherits v32 Paint Guard and uses a reversible
+depth-only Object Mode profile (0.05..50 safe, 0.1..20 strong).
+No native Vulkan engine fix or additional GPU resolution cost.
 
 Both APKs share Android package name org.blender.blender.
 They cannot be installed simultaneously as independent apps.
-This build may use a new signing certificate, so installing v32 on top of
+This build may use a new signing certificate, so installing v33 on top of
 v31 may fail. BACK UP .blend projects, images and external assets first.
 Do not uninstall the previous app until backups are verified.
 
@@ -88,7 +89,7 @@ def main():
     args = parser.parse_args()
     old_sha, new_sha = package(args.old_apk, args.new_apk, args.zip_output)
     print('v31 preserved:', old_sha)
-    print('v32 built:', new_sha)
+    print('v33 built:', new_sha)
     print('ZIP verified:', args.zip_output)
 
 

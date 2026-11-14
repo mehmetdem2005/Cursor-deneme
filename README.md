@@ -1,6 +1,6 @@
 # Blender for Android 11 — experimental GLB import and Mali graphics profiles
 
-**Latest build:** v32 Paint Guard, an experimental one-shot Texture Paint preflight with a reversible Solid/Flat viewport, manual Safe Texture Preview and diagnostic markers. Built from the existing v31 Safe Edit profile; NOT a tested native Vulkan fix. Old v31 preserved in the separate `android11-exp-run-31` GitHub Release. The v32 GitHub Release also contains a SHA-256-verified dual-APK ZIP.
+**Latest build:** v33 Mali Depth Guard. Builds on v32 Texture Paint protection with one-shot viewport clip precision SAFE 0.05..50 (at startup and on file load in Object Mode), STRONG 0.1..20 via View menu and Restore Original Depth. All existing native GPU limits retained. Mali GPU issue remains device-unverified.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 

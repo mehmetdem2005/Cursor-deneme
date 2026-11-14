@@ -1,4 +1,4 @@
-name: Blender Android 11 - v32 Texture Paint Guard
+name: Blender Android 11 - v33 Mali Depth Guard
 
 on:
   push:
@@ -105,16 +105,16 @@ jobs:
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
             dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-v32-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-v32-APKs.zip | tail -1
+            dist/Blender-Lite-v31-and-v33-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v33-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-v32-PAINT-GUARD-APK-and-ZIP
+          name: blender-lite-v33-DEPTH-GUARD-APK-and-ZIP
           path: |
             dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-v32-APKs.zip
+            dist/Blender-Lite-v31-and-v33-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -126,7 +126,7 @@ jobs:
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
             "dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-v32-APKs.zip" \
+            "dist/Blender-Lite-v31-and-v33-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite v32 Paint Guard + v31 original (device-unverified)" \
+            --title "Blender Lite v33 Mali Depth Guard + v31 original (device-unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

@@ -8,6 +8,12 @@ ENABLED = True
 PREVIOUS_SYSTEM = {}
 PREVIOUS_VIEW = {}
 
+# Independent, reversible depth-only viewport profile. Keep all native GPU
+# optimizations and Blender mesh/armature data completely untouched.
+DEPTH_PROFILE = 'SAFE'
+PREVIOUS_CLIP = {}
+DEPTH_RANGES = {'SAFE': (0.05, 50.0), 'STRONG': (0.1, 20.0)}
+
 
 def set_value(obj, name, value):
     try:
@@ -94,12 +100,14 @@ def restore_view():
 def on_load_pre(_unused):
     PREVIOUS_VIEW.clear()
     PREVIOUS_SYSTEM.clear()
+    PREVIOUS_CLIP.clear()
 
 
 @persistent
 def on_load_post(_unused):
     configure_autosave()
     apply_low_gpu()
+    apply_depth_profile(bpy.context)  # Object Mode only; one shot on load
 
 
 
@@ -290,6 +298,85 @@ class WM_OT_paint_diagnostics(Operator):
         self.report({'INFO'}, 'Diagnostic: Download/Blender/paint-guard.log')
         return {'FINISHED'}
 
+
+
+def apply_depth_profile(context):
+    """One shot: tighter 3D viewport depth range without GPU render changes.
+
+    Never run from pose/edit/paint mode. No timer/polling/depsgraph hooks and
+    no mesh/armature/UV/weight/material modifications.
+    """
+    if context.mode != 'OBJECT' or DEPTH_PROFILE == 'OFF':
+        return 0
+    near, far = DEPTH_RANGES[DEPTH_PROFILE]
+    applied = 0
+    for space in all_viewports():
+        try:
+            key = space.as_pointer()
+            if key not in PREVIOUS_CLIP:
+                PREVIOUS_CLIP[key] = (float(space.clip_start),
+                                      float(space.clip_end))
+            # Far first prevents Blender constraining near to the old far.
+            set_value(space, 'clip_end', far)
+            set_value(space, 'clip_start', near)
+            applied += 1
+        except (AttributeError, RuntimeError, ReferenceError, ValueError, TypeError):
+            pass
+    return applied
+
+
+def restore_depth_profile(context):
+    """Restore original viewport near/far, without touching scene contents."""
+    if context.mode != 'OBJECT':
+        return 0
+    count = 0
+    for space in all_viewports():
+        try:
+            old = PREVIOUS_CLIP.get(space.as_pointer())
+            if old is not None:
+                set_value(space, 'clip_end', old[1])
+                set_value(space, 'clip_start', old[0])
+                count += 1
+        except (AttributeError, RuntimeError, ReferenceError, ValueError, TypeError):
+            pass
+    PREVIOUS_CLIP.clear()
+    return count
+
+
+class WM_OT_safe_depth(Operator):
+    bl_idname = 'wm.safe_depth'
+    bl_label = 'Mali Depth Precision'
+    bl_description = 'Reduce z-fighting from excessive viewport clipping range'
+    bl_options = {'REGISTER'}
+
+    preset: bpy.props.EnumProperty(
+        items=[
+            ('SAFE', 'Mali Depth Safe', 'Near 0.05, far 50; lighter depth range'),
+            ('STRONG', 'Mali Depth Strong', 'Near 0.1, far 20; close-up may clip'),
+            ('OFF', 'Restore Original Depth', 'Restore original near/far'),
+        ], default='SAFE')
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        global DEPTH_PROFILE
+        if self.preset == 'OFF':
+            restored = restore_depth_profile(context)
+            DEPTH_PROFILE = 'OFF'
+            self.report({'INFO'}, 'Restored %d viewport depth ranges' % restored)
+        else:
+            DEPTH_PROFILE = self.preset
+            applied = apply_depth_profile(context)
+            if applied == 0:
+                self.report({'WARNING'}, 'No 3D viewport found')
+                return {'CANCELLED'}
+            near, far = DEPTH_RANGES[self.preset]
+            self.report({'INFO'}, 'Depth: near %g / far %g (%d views)' %
+                        (near, far, applied))
+        return {'FINISHED'}
+
 class WM_OT_safe_gpu(Operator):
     bl_idname = 'wm.safe_gpu'
     bl_label = 'Safe GPU Performance'
@@ -322,6 +409,14 @@ class VIEW3D_MT_safe_gpu(Menu):
         self.layout.operator('wm.prepare_texture_paint', text='Prepare Texture Paint (Object Mode)')
         self.layout.operator('wm.safe_texture_preview', text='Safe Texture Preview (No EEVEE)')
         self.layout.operator('wm.paint_diagnostics', text='Write Paint Diagnostics')
+        self.layout.separator()
+        op = self.layout.operator('wm.safe_depth', text='Mali Depth Safe (0.05-50)')
+        op.preset = 'SAFE'
+        op = self.layout.operator('wm.safe_depth', text='Mali Depth Strong (0.1-20)')
+        op.preset = 'STRONG'
+        op = self.layout.operator('wm.safe_depth', text='Restore Original Depth')
+        op.preset = 'OFF'
+        self.layout.label(text='Depth ON automatically in Object Mode')
         self.layout.label(text='3-minute native Auto Save')
 
 
@@ -341,10 +436,12 @@ def initialize_once():
     if hasattr(bpy.types, 'TOPBAR_MT_file'):
         bpy.types.TOPBAR_MT_file.append(menu_file)
     apply_low_gpu()
+    apply_depth_profile(bpy.context)  # One-shot at start, no repeating timer
     return None
 
 
 def register():
+    bpy.utils.register_class(WM_OT_safe_depth)
     bpy.utils.register_class(WM_OT_safe_gpu)
     bpy.utils.register_class(VIEW3D_MT_safe_gpu)
     bpy.utils.register_class(WM_OT_prepare_texture_paint)
@@ -361,6 +458,7 @@ def unregister():
     if bpy.app.timers.is_registered(initialize_once):
         bpy.app.timers.unregister(initialize_once)
     if bpy.context.mode == 'OBJECT':
+        restore_depth_profile(bpy.context)
         restore_view()
     for funcs, cb in ((bpy.app.handlers.load_pre, on_load_pre),
                       (bpy.app.handlers.load_post, on_load_post)):
@@ -379,3 +477,4 @@ def unregister():
     bpy.utils.unregister_class(WM_OT_prepare_texture_paint)
     bpy.utils.unregister_class(VIEW3D_MT_safe_gpu)
     bpy.utils.unregister_class(WM_OT_safe_gpu)
+    bpy.utils.unregister_class(WM_OT_safe_depth)
