@@ -6,32 +6,28 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_STORED
 
 OLD_NAME = 'Blender-Lite-v31-ORIGINAL.apk'
-NEW_NAME = 'Blender-Lite-v33-MALI-DEPTH-GUARD.apk'
+NEW_NAME = 'Blender-Lite-TOUCH-DIAGNOSTIC-UNVERIFIED.apk'
 OLD_SHA256 = 'c0a345b6496a903228932b6dd3425ffdbdf21a7d25b169996c3bd3e4a938f31b'
 OLD_SIZE = 203146975
 
-NOTES = """Blender Lite Android 11 experimental
+NOTES = """Blender Lite Android 11 — touch diagnostic experiment (NOT A VERIFIED SCALE FIX)
 
-v31 Original: preserved byte-for-byte from android11-exp-run-31.
-v33 Mali Depth Guard: inherits v32 Paint Guard and uses a reversible
-depth-only Object Mode profile (0.05..50 safe, 0.1..20 strong).
-No native Vulkan engine fix or additional GPU resolution cost.
+v31 ORIGINAL: byte-for-byte preserved from android11-exp-run-31.
+New diagnostic APK: includes source-backed touch behavior probes and a native
+numeric Scale comparison. Blender native touch classifier is UNMODIFIED.
 
-Both APKs share Android package name org.blender.blender.
-They cannot be installed simultaneously as independent apps.
-This build may use a new signing certificate, so installing v33 on top of
-v31 may fail. BACK UP .blend projects, images and external assets first.
-Do not uninstall the previous app until backups are verified.
+Test: create disposable cube, enter Edit Mode, select face, then
+View > Edit Mode Touch Diagnostics. First Inspect Selection, then numeric Scale,
+then interactive Scale and bounded Event Trace. Logs may be written to
+Download/Blender/edit-touch-trace.log if Android storage permits.
 
-Texture Paint: select mesh in Object Mode; View > Safe GPU / Rig >
-Prepare Texture Paint; then manually enter Texture Paint.
-Use Safe Texture Preview only if needed.
-Logs may appear at Download/Blender/paint-guard.log (if permitted).
-Save painted image separately, not only the .blend file.
+Real Redmi Note 8 Pro testing has NOT been performed by GitHub CI. Do not
+call the diagnostic APK a working fix. Use logcat/device traces to identify
+native input failure before changing native C++ or GPU behavior.
 
-No physical Mali-G76 Android 11 Texture Paint test was performed by CI.
-If Texture Paint still closes, capture Android logcat/tombstone and
-compare empty scene vs 256px image vs actual project.
+Both APKs share package ID org.blender.blender and cannot be installed side by
+side. Signing certificates may differ: BACK UP original .blend assets before
+uninstalling or reinstalling any build. Keep original v31/v33 releases.
 """
 
 
@@ -89,7 +85,7 @@ def main():
     args = parser.parse_args()
     old_sha, new_sha = package(args.old_apk, args.new_apk, args.zip_output)
     print('v31 preserved:', old_sha)
-    print('v33 built:', new_sha)
+    print('diagnostic APK built (not device verified):', new_sha)
     print('ZIP verified:', args.zip_output)
 
 

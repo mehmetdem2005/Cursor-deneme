@@ -10,6 +10,14 @@ on:
         required: false
         type: boolean
         default: false
+      render_divisor:
+        description: "A/B device input diagnostic: 1=full resolution, 2=half resolution"
+        required: true
+        type: choice
+        options:
+          - "2"
+          - "1"
+        default: "2"
 
 permissions:
   contents: write
@@ -84,7 +92,11 @@ jobs:
           set -Eeuo pipefail
           mkdir -p dist
           export ANDROID_BLENDER_RENDERDIV=2
-          APK=dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.render_divisor }}" == "1" ]]; then
+            export ANDROID_BLENDER_RENDERDIV=1
+          fi
+          echo "Touch diagnostic renderdiv=$ANDROID_BLENDER_RENDERDIV"
+          APK=dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py addon/touch_modeling.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -110,16 +122,16 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk \
             dist/Blender-Lite-v31-and-Touch-Diagnostics-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-v33-APKs.zip | tail -1
+          unzip -t dist/Blender-Lite-v31-and-Touch-Diagnostics-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-TOUCH-DIAGNOSTIC-UNVERIFIED-APK-and-ZIP
+          name: blender-lite-TOUCH-DIAGNOSTIC-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
           path: |
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+            dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk
             dist/Blender-Lite-v31-and-v33-APKs.zip
           if-no-files-found: error
           compression-level: 0
@@ -132,7 +144,7 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk" \
+            "dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk" \
             "dist/Blender-Lite-v31-and-v33-APKs.zip" \
             --target "$GITHUB_SHA" \
             --title "Blender Lite Touch Diagnostic Experiment + v31 original (NOT a verified Scale fix)" \

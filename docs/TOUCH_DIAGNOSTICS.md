@@ -42,7 +42,7 @@ Diagnostic changes never automatically select vertices, edit user meshes, or for
 - A: Tap numeric 1.25x, inspect whether selected vertex coordinate-energy changes.
 - B: Undo and tap interactive Scale, then gently drag and release.
 - C: Record a finger drag shorter than 96 physical px, then one longer than 120 px.
-- D: Compare A/B/C under renderdiv=1 and renderdiv=2 **only using independently rebuilt APK variants**, never changing a property which was statically cached after launch.
+- D: Compare A/B/C under renderdiv=1 and renderdiv=2 **only using independently rebuilt APK variants (workflow_dispatch offers render_divisor 1 or 2)**, never changing a property which was statically cached after launch.
 - E: Compare current v33 and baseline upstream on the same device if both can be installed with backups.
 
 If A succeeds but B fails and the logger receives MOUSEMOVE without LEFTMOUSE down until a large threshold, investigate GHOST touch slop/classifier in native C++ source. Consider smaller thresholds, correct coordinate units and long-press behavior **after** reproducing the problem. This cannot be fixed in the existing APK with a Python menu alone.
