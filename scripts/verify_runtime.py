@@ -7,10 +7,11 @@ import hashlib
 import sys
 
 ENTRY = "scripts/startup/mobile_speed.py"
+EXTRA_ENTRY = "scripts/startup/touch_modeling.py"
 ASSET = "assets/blender_runtime.zip"
 
 
-def verify(apk: Path, module: Path) -> None:
+def verify(apk: Path, module: Path, extra: Path | None = None) -> None:
     source = module.read_bytes()
     with ZipFile(apk) as outer:
         if ASSET not in outer.namelist():
@@ -24,11 +25,18 @@ def verify(apk: Path, module: Path) -> None:
             if not any(n.startswith("scripts/startup/bl_ui/") for n in inner.namelist()):
                 raise ValueError("Original Blender UI Python scripts missing")
             compile(packed, ENTRY, 'exec')
+            if extra is not None:
+                assert EXTRA_ENTRY in inner.namelist(), "Missing Touch Diagnostics module"
+                probe = extra.read_bytes()
+                if inner.read(EXTRA_ENTRY) != probe:
+                    raise ValueError("Packaged touch diagnostics differs from tested source")
+                compile(probe, EXTRA_ENTRY, 'exec')
     print("APK contains the tested Mobile Speed module:",
           hashlib.sha256(source).hexdigest())
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        raise SystemExit("Usage: verify_runtime.py <APK> <module.py>")
-    verify(Path(sys.argv[1]), Path(sys.argv[2]))
+    if len(sys.argv) not in (3, 4):
+        raise SystemExit("Usage: verify_runtime.py <APK> <module.py> [touch_module.py]")
+    verify(Path(sys.argv[1]), Path(sys.argv[2]),
+           Path(sys.argv[3]) if len(sys.argv) == 4 else None)

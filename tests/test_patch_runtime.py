@@ -3,7 +3,7 @@ from pathlib import Path
 from zipfile import ZipFile
 import unittest
 
-from scripts.patch_runtime import install, ENTRY
+from scripts.patch_runtime import install, ENTRY, EXTRA_ENTRY
 
 
 class RuntimePatchTests(unittest.TestCase):
@@ -25,6 +25,16 @@ class RuntimePatchTests(unittest.TestCase):
             self.assertEqual(z.read(ENTRY), self.script.read_bytes())
             self.assertEqual(z.read("scripts/startup/bl_ui/__init__.py"), b"original")
             self.assertEqual(len(z.namelist()), 3)
+
+    def test_adds_two_modules_without_overwriting_original(self):
+        extra = self.dir / "touch_modeling.py"
+        extra.write_text("def register():\n    return False\n")
+        install(self.dir, self.script, extra)
+        with ZipFile(self.archive) as z:
+            self.assertEqual(z.read(ENTRY), self.script.read_bytes())
+            self.assertEqual(z.read(EXTRA_ENTRY), extra.read_bytes())
+            self.assertEqual(z.read("scripts/startup/bl_ui/__init__.py"), b"original")
+            self.assertEqual(len(z.namelist()), 4)
 
     def test_abort_if_already_modified(self):
         install(self.dir, self.script)
