@@ -1,8 +1,8 @@
-name: Blender Android 11 - v33 Mali Depth Guard
+name: Blender Android 11 - v33 Material Guard
 
 on:
   push:
-    branches: [main]
+    branches: [fix/v33-material-guard]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
       APKTOOL_JAR: apktool.jar
 
     steps:
-      - name: Checkout main
+      - name: Checkout v33 material guard
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -57,6 +57,7 @@ jobs:
         shell: bash
         run: |
           python3 -m py_compile scripts/*.py addon/mobile_speed.py addon/ultra_survival.py addon/safe_edit.py
+          python3 -m unittest tests.test_material_guard -v
           python3 -m unittest discover -s tests -v
 
       - name: Download pinned real Blender Lite APK
@@ -78,7 +79,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p dist
           export ANDROID_BLENDER_RENDERDIV=2
-          APK=dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+          APK=dist/blender-lite-android11-v33-MATERIAL-GUARD-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -104,17 +105,17 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-v33-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-v33-APKs.zip | tail -1
+            dist/blender-lite-android11-v33-MATERIAL-GUARD-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-v33-Material-Guard-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v33-Material-Guard-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-v33-DEPTH-GUARD-APK-and-ZIP
+          name: blender-lite-v33-MATERIAL-GUARD-UNVERIFIED-APK-and-ZIP
           path: |
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-v33-APKs.zip
+            dist/blender-lite-android11-v33-MATERIAL-GUARD-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-v33-Material-Guard-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -124,9 +125,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-v33-APKs.zip" \
+          gh release create "android11-v33-material-guard-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-v33-MATERIAL-GUARD-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-v33-Material-Guard-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite v33 Mali Depth Guard + v31 original (device-unverified)" \
+            --title "Blender Lite v33 Material Guard experiment + v31 original (device-unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

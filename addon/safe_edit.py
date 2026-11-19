@@ -377,6 +377,102 @@ class WM_OT_safe_depth(Operator):
                         (near, far, applied))
         return {'FINISHED'}
 
+
+# v33 material-creation bypass for devices that crash in Material Properties.
+# This is a separate opt-in path; it does not patch the native Vulkan driver.
+def material_guard_log(event):
+    # No personal information, project paths, mesh names or material names.
+    safe_event = event if event in {
+        'BEGIN', 'SOLID_READY', 'BEFORE_NEW', 'AFTER_NEW',
+        'BEFORE_ASSIGN', 'ASSIGNED', 'PYTHON_ERROR'} else 'UNKNOWN'
+    import os
+    line = '[MaterialGuard] ' + safe_event
+    print(line, flush=True)
+    try:
+        directory = '/sdcard/Download/Blender'
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, 'material-guard.log'), 'a',
+                  encoding='utf-8') as logfile:
+            logfile.write(line + '\n')
+            logfile.flush()
+    except (OSError, PermissionError):
+        pass
+
+
+def create_safe_material(context, preset):
+    """Create a material without entering Material Properties or EEVEE.
+
+    Produces a plain viewport-colored material suitable for modelling.
+    No shader nodes, textures, material previews, or GPU compilation are requested.
+    Native crashes are not catchable as Python exceptions; markers help locate them.
+    """
+    if context.mode != 'OBJECT':
+        return False
+    obj = context.active_object
+    if obj is None or obj.type != 'MESH':
+        return False
+    if preset not in {'PROTON', 'NEUTRON'}:
+        return False
+    material_guard_log('BEGIN')
+    # On invocation, avoid the Material tab and any preview it can schedule.
+    # This is opt-in and changes UI context only, not mesh geometry.
+    for area in context.screen.areas:
+        if area.type == 'PROPERTIES':
+            try:
+                if area.spaces.active.context == 'MATERIAL':
+                    area.spaces.active.context = 'OBJECT'
+            except (AttributeError, RuntimeError, ValueError):
+                pass
+    if apply_paint_profile(context, textured=False) == 0:
+        return False
+    material_guard_log('SOLID_READY')
+    name, rgba = (
+        ('Atom Proton Blue', (0.03, 0.26, 0.90, 1.0))
+        if preset == 'PROTON' else
+        ('Atom Neutron Violet', (0.32, 0.10, 0.65, 1.0))
+    )
+    try:
+        # Deliberately use the Blender data API, not Material Properties > New
+        # (whose GPU preview path is implicated in native crashes).
+        material_guard_log('BEFORE_NEW')
+        mat = bpy.data.materials.new(name=name)
+        material_guard_log('AFTER_NEW')
+        mat.use_nodes = False
+        mat.diffuse_color = rgba
+        material_guard_log('BEFORE_ASSIGN')
+        obj.data.materials.append(mat)
+        obj.active_material_index = len(obj.data.materials) - 1
+        material_guard_log('ASSIGNED')
+        return True
+    except (AttributeError, RuntimeError, ReferenceError, ValueError, TypeError):
+        material_guard_log('PYTHON_ERROR')
+        return False
+
+
+class WM_OT_safe_material(Operator):
+    bl_idname = 'wm.safe_material'
+    bl_label = 'Create Safe Material (No Preview)'
+    bl_description = 'Add solid-color material without Material Properties preview'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    preset: bpy.props.EnumProperty(
+        items=[('PROTON', 'Proton Blue', 'Blue viewport material'),
+               ('NEUTRON', 'Neutron Violet', 'Violet viewport material')],
+        default='PROTON')
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return context.mode == 'OBJECT' and obj is not None and obj.type == 'MESH'
+
+    def execute(self, context):
+        if not create_safe_material(context, self.preset):
+            self.report({'ERROR'}, 'Material creation failed. Check Download/Blender/material-guard.log')
+            return {'CANCELLED'}
+        self.report({'INFO'}, 'Safe solid material added. Stay in Solid view; avoid Material tab on this APK.')
+        return {'FINISHED'}
+
+
 class WM_OT_safe_gpu(Operator):
     bl_idname = 'wm.safe_gpu'
     bl_label = 'Safe GPU Performance'
@@ -417,6 +513,13 @@ class VIEW3D_MT_safe_gpu(Menu):
         op = self.layout.operator('wm.safe_depth', text='Restore Original Depth')
         op.preset = 'OFF'
         self.layout.label(text='Depth ON automatically in Object Mode')
+        self.layout.separator()
+        self.layout.label(text='Material Crash Bypass (no previews)')
+        op = self.layout.operator('wm.safe_material', text='Add Safe Proton Blue')
+        op.preset = 'PROTON'
+        op = self.layout.operator('wm.safe_material', text='Add Safe Neutron Violet')
+        op.preset = 'NEUTRON'
+        self.layout.label(text='Do NOT tap Material Properties > New')
         self.layout.label(text='3-minute native Auto Save')
 
 
@@ -441,6 +544,7 @@ def initialize_once():
 
 
 def register():
+    bpy.utils.register_class(WM_OT_safe_material)
     bpy.utils.register_class(WM_OT_safe_depth)
     bpy.utils.register_class(WM_OT_safe_gpu)
     bpy.utils.register_class(VIEW3D_MT_safe_gpu)
@@ -478,3 +582,4 @@ def unregister():
     bpy.utils.unregister_class(VIEW3D_MT_safe_gpu)
     bpy.utils.unregister_class(WM_OT_safe_gpu)
     bpy.utils.unregister_class(WM_OT_safe_depth)
+    bpy.utils.unregister_class(WM_OT_safe_material)
