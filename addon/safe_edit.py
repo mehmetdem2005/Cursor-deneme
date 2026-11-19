@@ -39,6 +39,33 @@ def configure_autosave():
         set_value(p, 'save_version', 2)
 
 
+
+# Mali-G76 Android 11 material shadow budget candidate; not a GPU driver fix.
+def cap_mobile_eevee_shadow_pool(limit_mb=16):
+    """Limit old EEVEE GPU shadow atlas on high-RAM mobile devices.
+
+    Android alpha-4 only caps to 16 MB when total physical RAM is <6 GiB.
+    This change applies the cap using Blender's scene.eevee RNA enum.
+    """
+    if limit_mb not in {16, 32, 64, 128, 256, 512}:
+        return 0
+    try:
+        scenes = bpy.data.scenes
+    except (AttributeError, RuntimeError, ReferenceError):
+        return 0
+    changed = 0
+    for scene in scenes:
+        try:
+            eevee = getattr(scene, 'eevee', None)
+            current = getattr(eevee, 'shadow_pool_size', None)
+            if current is not None and int(current) > limit_mb:
+                eevee.shadow_pool_size = str(limit_mb)
+                changed += 1
+        except (AttributeError, RuntimeError, TypeError, ValueError, ReferenceError):
+            pass
+    return changed
+
+
 def apply_low_gpu():
     # Critical regression safeguard: NEVER update Blender display or
     # scene properties while Edit, Pose or Weight Paint is active.
@@ -106,6 +133,7 @@ def on_load_pre(_unused):
 @persistent
 def on_load_post(_unused):
     configure_autosave()
+    cap_mobile_eevee_shadow_pool(16)
     apply_low_gpu()
     apply_depth_profile(bpy.context)  # Object Mode only; one shot on load
 
@@ -431,6 +459,7 @@ def menu_file(self, context):
 
 
 def initialize_once():
+    cap_mobile_eevee_shadow_pool(16)
     if hasattr(bpy.types, 'VIEW3D_MT_view'):
         bpy.types.VIEW3D_MT_view.append(menu_view)
     if hasattr(bpy.types, 'TOPBAR_MT_file'):
@@ -450,6 +479,7 @@ def register():
     bpy.app.handlers.load_pre.append(on_load_pre)
     bpy.app.handlers.load_post.append(on_load_post)
     configure_autosave()
+    cap_mobile_eevee_shadow_pool(16)
     if not bpy.app.background:
         bpy.app.timers.register(initialize_once, first_interval=1.0)
 

@@ -1,0 +1,23 @@
+name: Offline Mali-G76 Material Safety Audit
+on:
+  push:
+    branches: [research/v33-mali-g76-material-gpu-budget]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-safety-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Source and budget regression tests (no APK)
+        run: |
+          python3 -m py_compile addon/safe_edit.py scripts/patch_mobile_shadow_pool.py
+          python3 -m unittest discover -s tests -p 'test_material_gpu_budget.py' -v
+      - name: Verify no device testing or APK publication
+        run: |
+          echo "OFFLINE tests only; no Vulkan, device, APK, or release."
+          echo "CI success does not establish Mali-G76 safety."
