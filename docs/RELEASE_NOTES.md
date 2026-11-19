@@ -1,24 +1,23 @@
-# Blender Lite v33 — Mali Depth Guard (experimental)
+# v33 General Material Properties Panel Experiment (NOT a native Vulkan fix)
 
-Built from v32 Paint Guard. Preserves:
-- Native half-resolution render divisor 2 and low-memory flag
-- 96 UI DPI, 128px viewport preview texture clamp
-- GPU subdivision OFF, anti-aliasing OFF, Solid/Flat GPU defaults
-- Native Android looper and 3-minute autosave
-- Texture Paint preparation, reversible Safe Texture Preview, diagnostics
+Based on exact original v33 06694e9f804404c24367da9f7a600f17f012f08e. Main is not changed.
 
-### New depth control
-- A one-time, reversible near/far viewport clip profile is prepared at app startup and after loading a file **only when Blender is in Object Mode**. This does not change mesh, skinning, armature, UVs, materials, render quality or framebuffer resolution.
-- SAFE (default): near 0.05 and far 50.0 Blender units.
-- STRONG (manual): near 0.1 and far 20.0 for diagnosing fine Z-fighting; very close details/distant objects can be clipped.
-- View > Safe GPU / Rig > Mali Depth Safe, Mali Depth Strong, or Restore Original Depth. Switch to Object Mode before using the menu.
-- If a project opens directly in Pose/Edit/Weight Paint, we do not modify GPU viewport state in those modes. Go to Object Mode and choose Mali Depth Safe once.
-- Saves made while the new clip profile is active may also save those viewport clip values (not mesh data); Restore Original Depth is provided. Back up .blend first.
+## What changed
+- Edits Blender's **standard** Material Properties UI, not a shape-specific menu. For supported object types, + keeps adding a material slot, New keeps creating a material, and the material picker, surface/volume/settings, viewport color, and node editors are retained.
+- The + button uses a guarded Python data operation to add a slot; New uses Blender material datablocks, or copies the selected material.
+- The default material thumbnail **Preview** subpanel is suppressed to avoid scheduling expensive EEVEE material preview renders on a Mali device, where the preview and the Vulkan driver may hang. The rest of Material Properties is kept.
+- Before and after operation markers written to Download/Blender/material-ui.log (when permitted), without model or project names.
+- Existing v33 optimizations, depth profile, three-minute autosave, and v31 APK preservation remain.
 
-### Root cause still not proven
-Two prior MouseBody .blend versions were checked: no identical overlapping triangle areas were detected, but both saved clip_start 0.01/clip_end 1000 for 10 viewports. This strongly motivates a depth precision experiment, **not a proven native driver fix**.
-The Android alpha-4 Mali/Vulkan known stray triangle issue can remain. No real Mali-G76 GPU test was executed in GitHub CI.
-Compare same MouseBody file/view in SAFE and original settings. If artifacts persist, need sanitized device logcat/bugreport and a native Vulkan driver fix.
+## Limits / do not misrepresent
+- This is a Python GUI/data-path experiment, not a C++ Vulkan fix. It cannot fix GPU driver deadlocks, shader compiler hangs, Material Preview or Rendered view, or all Material operations in native code.
+- It is for **all Blender-compatible material objects**, not just the atom model. It does not restrict creation to two colors.
+- Material Preview thumbnail is unavailable in this test; materials and shader nodes remain editable, subject to driver limitations.
+- GitHub CI checks packaging and mocked Python tests only. Tests on real Redmi Note 8 Pro/Mali-G76 are mandatory before calling it fixed.
 
-The GitHub Release includes new v33 APK and a ZIP containing byte-for-byte v31 original (SHA256 c0a345b6496a903228932b6dd3425ffdbdf21a7d25b169996c3bd3e4a938f31b) and new v33 APK, with SHA256SUMS.
-Both APKs share package ID org.blender.blender and cannot be installed side-by-side. Test signing may differ; back up user data before changing versions.
+## Test
+1. Back up .blend and images; don't uninstall original v33 until backed up. APKs share package ID and cannot install side-by-side.
+2. Open new, disposable Sphere in Object Mode, Solid view, Material Properties tab.
+3. Press + to add an empty slot; click New to create an editable material. Adjust surface color, roughness, nodes (while staying Solid) and save/reopen.
+4. Repeat on a mesh and a curve, then existing project.
+5. If it stalls, after app closes inspect Download/Blender/material-ui.log and Android bugreport/logcat; last checkpoint helps identify step. ANR vs app force-close must be distinguished.

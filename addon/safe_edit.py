@@ -377,6 +377,94 @@ class WM_OT_safe_depth(Operator):
                         (near, far, applied))
         return {'FINISHED'}
 
+
+# Normal Material Properties panel integration (all compatible mesh-like objects).
+# The buttons remain in the original Material tab; only the operator route is changed.
+# The Preview subpanel is temporarily suppressed by patch_material_ui.py because
+# EEVEE preview GPU work can stall on Mali. Native Vulkan is NOT modified.
+MATERIAL_UI_TYPES = {'MESH', 'CURVE', 'SURFACE', 'FONT', 'META'}
+
+
+def material_ui_log(event):
+    import os
+    safe = event if event in {
+        'SLOT_BEGIN', 'SLOT_DONE', 'NEW_BEGIN', 'BEFORE_MATERIAL_NEW',
+        'AFTER_MATERIAL_NEW', 'BEFORE_ASSIGN', 'NEW_DONE', 'PYTHON_ERROR'
+    } else 'UNKNOWN'
+    print('[MaterialUI] ' + safe, flush=True)
+    try:
+        folder = '/sdcard/Download/Blender'
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, 'material-ui.log'), 'a', encoding='utf-8') as out:
+            out.write(safe + '\n')
+    except (OSError, PermissionError):
+        pass
+
+
+def material_ui_eligible(context):
+    obj = getattr(context, 'object', None)
+    return (context.mode == 'OBJECT' and obj is not None
+            and obj.type in MATERIAL_UI_TYPES
+            and hasattr(getattr(obj, 'data', None), 'materials'))
+
+
+class WM_OT_material_ui_slot_add(Operator):
+    bl_idname = 'wm.material_ui_slot_add'
+    bl_label = 'Add Material Slot'
+    bl_description = 'Add normal material slot from Material Properties'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return material_ui_eligible(context)
+
+    def execute(self, context):
+        material_ui_log('SLOT_BEGIN')
+        try:
+            obj = context.object
+            obj.data.materials.append(None)
+            obj.active_material_index = len(obj.material_slots) - 1
+            material_ui_log('SLOT_DONE')
+            return {'FINISHED'}
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            material_ui_log('PYTHON_ERROR')
+            self.report({'ERROR'}, 'Material slot failed; see material-ui.log')
+            return {'CANCELLED'}
+
+
+class WM_OT_material_ui_new(Operator):
+    bl_idname = 'wm.material_ui_new'
+    bl_label = 'New Material'
+    bl_description = 'Create normal editable material from Material Properties'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return material_ui_eligible(context)
+
+    def execute(self, context):
+        material_ui_log('NEW_BEGIN')
+        mat = None
+        try:
+            obj = context.object
+            before = obj.active_material
+            material_ui_log('BEFORE_MATERIAL_NEW')
+            mat = before.copy() if before is not None else bpy.data.materials.new(name='Material')
+            material_ui_log('AFTER_MATERIAL_NEW')
+            material_ui_log('BEFORE_ASSIGN')
+            if len(obj.material_slots) == 0:
+                obj.data.materials.append(mat)
+                obj.active_material_index = len(obj.material_slots) - 1
+            else:
+                obj.material_slots[obj.active_material_index].material = mat
+            material_ui_log('NEW_DONE')
+            return {'FINISHED'}
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            material_ui_log('PYTHON_ERROR')
+            self.report({'ERROR'}, 'Material creation failed; see material-ui.log')
+            return {'CANCELLED'}
+
+
 class WM_OT_safe_gpu(Operator):
     bl_idname = 'wm.safe_gpu'
     bl_label = 'Safe GPU Performance'
@@ -441,6 +529,8 @@ def initialize_once():
 
 
 def register():
+    bpy.utils.register_class(WM_OT_material_ui_slot_add)
+    bpy.utils.register_class(WM_OT_material_ui_new)
     bpy.utils.register_class(WM_OT_safe_depth)
     bpy.utils.register_class(WM_OT_safe_gpu)
     bpy.utils.register_class(VIEW3D_MT_safe_gpu)
@@ -478,3 +568,5 @@ def unregister():
     bpy.utils.unregister_class(VIEW3D_MT_safe_gpu)
     bpy.utils.unregister_class(WM_OT_safe_gpu)
     bpy.utils.unregister_class(WM_OT_safe_depth)
+    bpy.utils.unregister_class(WM_OT_material_ui_new)
+    bpy.utils.unregister_class(WM_OT_material_ui_slot_add)

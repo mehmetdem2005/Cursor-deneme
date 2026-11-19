@@ -28,6 +28,7 @@ fi
 
 echo "[4/9] Add reversible Mobile Performance UI to bundled Python startup scripts"
 python3 scripts/patch_runtime.py "$WORKDIR/decoded" addon/safe_edit.py
+python3 scripts/patch_material_ui.py "$WORKDIR/decoded"
 
 echo "[5/9] Install app-local half-resolution render buffers via native property shim"
 bash scripts/install_renderdiv.sh "$WORKDIR/decoded" "$ANDROID_NDK_CLANG"

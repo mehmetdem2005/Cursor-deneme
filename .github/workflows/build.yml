@@ -1,8 +1,8 @@
-name: Blender Android 11 - v33 Mali Depth Guard
+name: Blender Android 11 - v33 General Material Panel Experiment
 
 on:
   push:
-    branches: [main]
+    branches: [fix/v33-material-panel-general]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
       APKTOOL_JAR: apktool.jar
 
     steps:
-      - name: Checkout main
+      - name: Checkout general material panel experiment
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -78,7 +78,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p dist
           export ANDROID_BLENDER_RENDERDIV=2
-          APK=dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
+          APK=dist/blender-lite-android11-v33-MATERIAL-PANEL-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -104,17 +104,17 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-v33-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-v33-APKs.zip | tail -1
+            dist/blender-lite-android11-v33-MATERIAL-PANEL-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-Material-Panel-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-Material-Panel-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-v33-DEPTH-GUARD-APK-and-ZIP
+          name: blender-lite-v33-GENERAL-MATERIAL-PANEL-UNVERIFIED
           path: |
-            dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-v33-APKs.zip
+            dist/blender-lite-android11-v33-MATERIAL-PANEL-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-Material-Panel-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -124,9 +124,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-v33-APKs.zip" \
+          gh release create "android11-v33-material-panel-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-v33-MATERIAL-PANEL-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-Material-Panel-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite v33 Mali Depth Guard + v31 original (device-unverified)" \
+            --title "Blender Lite v33 Material Panel Experiment + v31 original (device-unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
