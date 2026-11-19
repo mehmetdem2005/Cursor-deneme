@@ -14,11 +14,11 @@ import os
 import sys
 
 ENTRY = "scripts/startup/bl_ui/properties_material.py"
-SLOT_ORIGINAL = 'col.operator("object.material_slot_add", icon=\\'ADD\\', text="")'
-SLOT_UPDATED = 'col.operator("wm.material_ui_slot_add", icon=\\'ADD\\', text="")'
+SLOT_ORIGINAL = """col.operator("object.material_slot_add", icon='ADD', text="")"""
+SLOT_UPDATED = """col.operator("wm.material_ui_slot_add", icon='ADD', text="")"""
 NEW_ORIGINAL = 'row.template_ID(ob, "active_material", new="material.new")'
 NEW_UPDATED = 'row.template_ID(ob, "active_material", new="wm.material_ui_new")'
-PREVIEW_ORIGINAL = '    MATERIAL_PT_preview,\\n'
+PREVIEW_ORIGINAL = "    MATERIAL_PT_preview,\n"
 
 
 def patch_material_source(source):
@@ -31,7 +31,7 @@ def patch_material_source(source):
             raise ValueError(f"Unsupported upstream Material UI ({name}): expected once")
     out = source.replace(SLOT_ORIGINAL, SLOT_UPDATED)
     out = out.replace(NEW_ORIGINAL, NEW_UPDATED)
-    out = out.replace(PREVIEW_ORIGINAL, "    # MATERIAL_PT_preview disabled on Android Mali (GPU hang experiment)\\n")
+    out = out.replace(PREVIEW_ORIGINAL, "    # Material GPU preview disabled on Android Mali\n")
     compile(out, ENTRY, "exec")
     assert 'EEVEE_MATERIAL_PT_surface' in out and 'MATERIAL_PT_viewport' in out
     assert 'MATERIAL_UL_matslots' in out
