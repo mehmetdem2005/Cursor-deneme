@@ -40,3 +40,4 @@ jobs:
           aarch64-linux-gnu-readelf -r /tmp/libblender.so | grep -E 'sysconf|meminfo' | head -c 1000 || true
           echo ":: FIND INSTRUCTIONS ::"
           python3 scripts/inspect_native_shadow_cap.py /tmp/libblender.so
+          python3 scripts/analyze_sysconf_calls.py /tmp/libblender.so
