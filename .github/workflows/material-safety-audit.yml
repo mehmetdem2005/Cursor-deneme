@@ -1,23 +1,53 @@
-name: Offline Mali-G76 Material Safety Audit
+name: Offline Mali-G76 Native Material Safety Audit
 on:
   push:
-    branches: [research/v33-mali-g76-material-gpu-budget]
+    branches: [research/v33-mali-material-native-optimization]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  source-safety-check:
+  safety-source-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Source and budget regression tests (no APK)
+      - name: Unit tests without GPU or APK execution
         run: |
-          python3 -m py_compile addon/safe_edit.py scripts/patch_mobile_shadow_pool.py
+          python3 -m py_compile addon/safe_edit.py scripts/patch_mobile_shadow_pool.py scripts/scan_android_material_risks.py
           python3 -m unittest discover -s tests -p 'test_material_gpu_budget.py' -v
-      - name: Verify no device testing or APK publication
+          python3 -m unittest discover -s tests -p 'test_material_source_scanner.py' -v
+      - name: Validate actual pinned Blender Alpha-4 C++ and panel source
+        shell: bash
         run: |
-          echo "OFFLINE tests only; no Vulkan, device, APK, or release."
-          echo "CI success does not establish Mali-G76 safety."
+          set -Eeuo pipefail
+          mkdir -p /tmp/mali-alpha4/source/blender/draw/engines/eevee
+          mkdir -p /tmp/mali-alpha4/scripts/startup/bl_ui
+          mkdir -p /tmp/mali-alpha4/source/blender/gpu/vulkan
+          SRC="https://raw.githubusercontent.com/simfeo/blender/d93bd33cba768e19ee4387a31c0ea137ee2f0047"
+          curl -fL --retry 3 "$SRC/source/blender/draw/engines/eevee/eevee_shadow.cc" -o /tmp/mali-alpha4/source/blender/draw/engines/eevee/eevee_shadow.cc
+          curl -fL --retry 3 "$SRC/scripts/startup/bl_ui/properties_material.py" -o /tmp/mali-alpha4/scripts/startup/bl_ui/properties_material.py
+          curl -fL --retry 3 "$SRC/source/blender/gpu/vulkan/vk_resource_pool.cc" -o /tmp/mali-alpha4/source/blender/gpu/vulkan/vk_resource_pool.cc
+          python3 scripts/scan_android_material_risks.py /tmp/mali-alpha4
+          python3 scripts/patch_mobile_shadow_pool.py /tmp/mali-alpha4
+          python3 scripts/patch_mobile_shadow_pool.py /tmp/mali-alpha4 --apply --limit-mb 16
+          python3 - <<'PY'
+          from pathlib import Path
+          from scripts.patch_mobile_shadow_pool import sha256, RELATIVE_PATH, OLD
+          folder=Path("/tmp/mali-alpha4")
+          file=folder/RELATIVE_PATH
+          backup=file.with_name(file.name+".pre-mali-budget.bak")
+          old=backup.read_bytes()
+          new=file.read_bytes()
+          assert old != new
+          assert old.decode().count(OLD)==1
+          assert b"pool_size_mb = min_ii(pool_size_mb, 16);" in new
+          assert b"total_bytes < (6ull << 30)" not in new
+          print("Pinned upstream source verified:",sha256(old),sha256(new))
+          PY
+      - name: Hardware and release quarantine
+        run: |
+          echo "Source-only test. No Android APK, no GPU, no installation, no release."
+          echo "Do NOT use this as proof that Material is safe on Mali-G76."
