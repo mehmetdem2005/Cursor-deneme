@@ -32,6 +32,9 @@ python3 scripts/patch_runtime.py "$WORKDIR/decoded" addon/safe_edit.py
 echo "[5/9] Install app-local half-resolution render buffers via native property shim"
 bash scripts/install_renderdiv.sh "$WORKDIR/decoded" "$ANDROID_NDK_CLANG"
 
+# Native EEVEE 16 MB GPU memory cap. Fail the build unless exact pinned machine code matches.
+python3 scripts/patch_native_mali_shadow_elf.py "$WORKDIR/decoded/lib/arm64-v8a/libblender.so"
+
 echo "[6/9] Rebuild original Blender application, assets and native libraries"
 java -Xmx4g -jar "$APKTOOL_JAR" b -o "$WORKDIR/unsigned.apk" "$WORKDIR/decoded"
 

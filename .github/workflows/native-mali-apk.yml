@@ -1,0 +1,134 @@
+name: Blender Android 11 - v33 Native Mali Budget EXPERIMENTAL
+
+on:
+  push:
+    branches: [build/v33-mali-native-budget-candidate]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: blender-android11-safe-edit
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      UPSTREAM_URL: https://github.com/simfeo/blender/releases/download/android-alpha-4/blender-lite.apk
+      UPSTREAM_SHA256: 5d05835e52377c7d987145b6c35a944804c88e32e114fd53ede4c36edea20ce1
+      APKTOOL_URL: https://github.com/iBotPeaches/Apktool/releases/download/v2.12.1/apktool_2.12.1.jar
+      APKTOOL_JAR: apktool.jar
+
+    steps:
+      - name: Checkout v33 Mali native budget candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK, NDK and ELF tools
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDK_MANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDK_MANAGER" && test -x "$SDK_MANAGER"
+          "$SDK_MANAGER" --install "build-tools;35.0.0" "platforms;android-35"
+          NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit 2>/dev/null || true)"
+          if [ -z "$NDK_CLANG" ]; then
+            "$SDK_MANAGER" --install "ndk;28.2.13676358"
+            NDK_CLANG="$(find "$SDK_ROOT/ndk" -type f -name aarch64-linux-android30-clang -print -quit)"
+          fi
+          test -n "$NDK_CLANG" && test -x "$NDK_CLANG"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_BUILD_TOOLS=$SDK_ROOT/build-tools/35.0.0" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_CLANG=$NDK_CLANG" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq patchelf
+          python3 -m pip install --user "pyelftools==0.32" "capstone==5.0.6"
+
+      - name: Run compatibility tests
+        shell: bash
+        run: |
+          python3 -m py_compile scripts/*.py addon/mobile_speed.py addon/ultra_survival.py addon/safe_edit.py
+          python3 -m unittest discover -s tests -v
+
+      - name: Download pinned real Blender Lite APK
+        shell: bash
+        run: |
+          curl -fLSs --retry 5 --retry-delay 4 "$UPSTREAM_URL" -o upstream.apk
+          printf '%s  %s\n' "$UPSTREAM_SHA256" upstream.apk | sha256sum --check
+          curl -fLSs --retry 5 --retry-delay 4 "$APKTOOL_URL" -o apktool.jar
+          java -jar apktool.jar --version
+
+      - name: Build, sign and verify experimental APK
+        shell: bash
+        env:
+          BLENDER_SIGNING_KEYSTORE_BASE64: ${{ secrets.BLENDER_SIGNING_KEYSTORE_BASE64 }}
+          BLENDER_KEYSTORE_PASS: ${{ secrets.BLENDER_KEYSTORE_PASS }}
+          BLENDER_KEY_ALIAS: ${{ secrets.BLENDER_KEY_ALIAS }}
+          BLENDER_KEY_PASS: ${{ secrets.BLENDER_KEY_PASS }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist
+          export ANDROID_BLENDER_RENDERDIV=2
+          APK=dist/blender-lite-android11-v33-MALI-NATIVE-BUDGET-UNVERIFIED.apk
+          bash scripts/repack.sh upstream.apk "$APK"
+          python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py
+          unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/verify-native-budget.so
+          python3 scripts/patch_native_mali_shadow_elf.py /tmp/verify-native-budget.so --verify
+          unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
+          unzip -p "$APK" lib/arm64-v8a/librenderdiv_shim.so > /tmp/final-shim.so
+          readelf -Ws /tmp/final-blender.so | grep -F blender_renderdiv_get
+          readelf -Ws /tmp/final-blender.so | grep -F blender_pollOnce
+          readelf -d /tmp/final-blender.so | grep -F librenderdiv_shim.so
+          readelf -Ws /tmp/final-shim.so | grep -F blender_renderdiv_get
+          readelf -Ws /tmp/final-shim.so | grep -F blender_pollOnce
+          readelf -d /tmp/final-shim.so | grep -F libandroid.so
+          echo "Native ARM64 machine instruction patch and helper imports verified. Physical GPU safety NOT VERIFIED."
+
+      - name: Verify preserved v31 APK and assemble dual-APK ZIP
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p dist/original
+          gh release download android11-exp-run-31 \
+            --repo "${{ github.repository }}" \
+            --pattern blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            --dir dist/original
+          python3 scripts/package_dual_apk.py \
+            dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            dist/blender-lite-android11-v33-MALI-NATIVE-BUDGET-UNVERIFIED.apk \
+            dist/Blender-Lite-v31-and-v33-NativeBudget-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v33-NativeBudget-APKs.zip | tail -1
+
+      - name: Upload signed APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-lite-v33-MALI-NATIVE-BUDGET-EXPERIMENTAL-APK-and-ZIP
+          path: |
+            dist/blender-lite-android11-v33-MALI-NATIVE-BUDGET-UNVERIFIED.apk
+            dist/Blender-Lite-v31-and-v33-NativeBudget-APKs.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish experimental GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "android11-v33-mali-native-budget-$GITHUB_RUN_NUMBER" \
+            "dist/blender-lite-android11-v33-MALI-NATIVE-BUDGET-UNVERIFIED.apk" \
+            "dist/Blender-Lite-v31-and-v33-NativeBudget-APKs.zip" \
+            --target "$GITHUB_SHA" \
+            --title "Blender Lite v33 Native Mali 16MB Shadow Budget + v31 Original (UNSAFE FOR DAILY PHONE TESTING)" \
+            --notes-file docs/RELEASE_NOTES.md --prerelease
