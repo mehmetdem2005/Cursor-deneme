@@ -17,8 +17,7 @@ jobs:
       - name: Unit tests without GPU or APK execution
         run: |
           python3 -m py_compile addon/safe_edit.py scripts/patch_mobile_shadow_pool.py scripts/scan_android_material_risks.py
-          python3 -m unittest discover -s tests -p 'test_material_gpu_budget.py' -v
-          python3 -m unittest discover -s tests -p 'test_material_source_scanner.py' -v
+          python3 -m unittest discover -s tests -v
       - name: Validate actual pinned Blender Alpha-4 C++ and panel source
         shell: bash
         run: |
