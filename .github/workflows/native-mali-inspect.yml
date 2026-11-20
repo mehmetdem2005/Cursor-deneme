@@ -1,0 +1,42 @@
+name: Inspect v33 native ARM64 material memory cap
+on:
+  push:
+    branches: [build/v33-mali-native-budget-candidate]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq binutils-aarch64-linux-gnu
+          python3 -m pip install --disable-pip-version-check pyelftools==0.32 capstone==5.0.6
+      - name: Download original verified v33 APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download android11-exp-run-34 --repo "${{ github.repository }}" \
+            --pattern blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk --dir /tmp/
+          unzip -p /tmp/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
+            lib/arm64-v8a/libblender.so > /tmp/libblender.so
+          sha256sum /tmp/libblender.so
+          ls -lh /tmp/libblender.so
+      - name: Inspect native symbols and call site
+        shell: bash
+        run: |
+          aarch64-linux-gnu-readelf -h /tmp/libblender.so | grep -E 'Machine:|Class:'
+          echo ":: DYNAMIC SYMBOLS ::"
+          aarch64-linux-gnu-readelf -Ws /tmp/libblender.so | grep -Ei \
+            'sysconf|ShadowModule|shadow_pool|Eevee|render_preview' | head -c 14000 || true
+          echo ":: RAW SYMBOL TABLE ::"
+          aarch64-linux-gnu-nm -aC /tmp/libblender.so 2>&1 | grep -E \
+            'ShadowModule::init|sysconf' | head -c 8000 || true
+          echo ":: IMPORTS ::"
+          aarch64-linux-gnu-readelf -r /tmp/libblender.so | grep -E 'sysconf|meminfo' | head -c 1000 || true
+          echo ":: FIND INSTRUCTIONS ::"
+          python3 scripts/inspect_native_shadow_cap.py /tmp/libblender.so
