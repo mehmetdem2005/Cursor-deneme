@@ -1,4 +1,8 @@
-# Blender Lite v33 — Mali Depth Guard (experimental)
+# Blender Lite Material Guard — A/B experimental build
+
+This is a diagnostic mitigation, not a verified native crash fix. `material_guard=1` disables only the Material Properties GPU thumbnail. Normal New Material, material slots, shader nodes and 3D View Material Preview remain. `material_guard=0` keeps upstream thumbnail for comparison. Native Vulkan/GLES libraries are unchanged. Same pinned alpha-4 APK base; v31 original kept inside separate rollback ZIP. Save project backups before installing. Real Redmi Note 8 Pro tests still required.
+
+## Earlier v33 Mali Depth Guard
 
 Built from v32 Paint Guard. Preserves:
 - Native half-resolution render divisor 2 and low-memory flag

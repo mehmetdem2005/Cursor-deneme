@@ -10,6 +10,12 @@ on:
         required: false
         type: boolean
         default: false
+      material_guard:
+        description: "A/B: 1 omits GPU material thumbnail; 0 leaves upstream preview"
+        required: true
+        type: choice
+        options: ["1", "0"]
+        default: "1"
       render_divisor:
         description: "A/B device input diagnostic: 1=full resolution, 2=half resolution"
         required: true
@@ -95,8 +101,12 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.render_divisor }}" == "1" ]]; then
             export ANDROID_BLENDER_RENDERDIV=1
           fi
-          echo "Touch diagnostic renderdiv=$ANDROID_BLENDER_RENDERDIV"
-          APK=dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk
+          export ANDROID_BLENDER_MATERIAL_GUARD=1
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.material_guard }}" == "0" ]]; then
+            export ANDROID_BLENDER_MATERIAL_GUARD=0
+          fi
+          echo "Material guard=$ANDROID_BLENDER_MATERIAL_GUARD, renderdiv=$ANDROID_BLENDER_RENDERDIV"
+          APK=dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py addon/touch_modeling.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -122,17 +132,17 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-Touch-Diagnostics-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-Touch-Diagnostics-APKs.zip | tail -1
+            dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-Material-Guard-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-Material-Guard-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-TOUCH-DIAGNOSTIC-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
+          name: blender-lite-MATERIAL-GUARD-${{ inputs.material_guard || '1' }}-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
           path: |
-            dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-v33-APKs.zip
+            dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-Material-Guard-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -144,8 +154,8 @@ jobs:
         shell: bash
         run: |
           gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-TOUCH-DIAG-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-v33-APKs.zip" \
+            "dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-Material-Guard-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite Touch Diagnostic Experiment + v31 original (NOT a verified Scale fix)" \
+            --title "Blender Lite Material Preview A/B + v31 (NOT device verified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

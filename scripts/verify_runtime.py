@@ -4,6 +4,7 @@ import io
 from pathlib import Path
 from zipfile import ZipFile
 import hashlib
+import os
 import sys
 
 ENTRY = "scripts/startup/mobile_speed.py"
@@ -25,6 +26,13 @@ def verify(apk: Path, module: Path, extra: Path | None = None) -> None:
             if not any(n.startswith("scripts/startup/bl_ui/") for n in inner.namelist()):
                 raise ValueError("Original Blender UI Python scripts missing")
             compile(packed, ENTRY, 'exec')
+            guard = os.environ.get('ANDROID_BLENDER_MATERIAL_GUARD', '1') == '1'
+            material_ui = inner.read('scripts/startup/bl_ui/properties_material.py')
+            if b'classes = (' not in material_ui:
+                raise ValueError('Missing material UI registration')
+            preview_registered = b'    MATERIAL_PT_preview,' in material_ui.split(b'classes = (', 1)[1]
+            if preview_registered == guard:
+                raise ValueError('Signed APK contains wrong Material Guard A/B variant')
             if extra is not None:
                 assert EXTRA_ENTRY in inner.namelist(), "Missing Touch Diagnostics module"
                 probe = extra.read_bytes()
