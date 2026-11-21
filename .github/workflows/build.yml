@@ -1,4 +1,4 @@
-name: Blender Android 11 - Touch Diagnostic Experiment
+name: Blender Lite v38 - Mali Material Guard Diagnostic
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "Publish experimental diagnostic prerelease (not a verified Scale fix)"
+        description: "Publish v38 Material Guard prerelease (experimental; no on-device guarantee)"
         required: false
         type: boolean
         default: false
@@ -106,7 +106,7 @@ jobs:
             export ANDROID_BLENDER_MATERIAL_GUARD=0
           fi
           echo "Material guard=$ANDROID_BLENDER_MATERIAL_GUARD, renderdiv=$ANDROID_BLENDER_RENDERDIV"
-          APK=dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk
+          APK=dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py addon/touch_modeling.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -132,30 +132,30 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-Material-Guard-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-Material-Guard-APKs.zip | tail -1
+            dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-MATERIAL-GUARD-${{ inputs.material_guard || '1' }}-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
+          name: blender-lite-v38-MATERIAL-GUARD-${{ inputs.material_guard || '1' }}-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
           path: |
-            dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-Material-Guard-APKs.zip
+            dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
-      - name: Publish experimental GitHub prerelease
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+      - name: Publish v38 Material Guard direct APK prerelease
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "android11-exp-run-$GITHUB_RUN_NUMBER" \
-            "dist/blender-lite-android11-MATERIAL-GUARD-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-Material-Guard-APKs.zip" \
+          gh release create "android11-v38-material-guard" \
+            "dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite Material Preview A/B + v31 (NOT device verified)" \
+            --title "Blender Lite v38 Material Guard + original v31 (experimental; device unverified)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease
