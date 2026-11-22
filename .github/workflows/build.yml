@@ -1,4 +1,4 @@
-name: Blender Lite v38 - Mali Material Guard Diagnostic
+name: Blender Lite v39 - Audio Safe Startup
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_release:
-        description: "Publish v38 Material Guard prerelease (experimental; no on-device guarantee)"
+        description: "Publish v39 Audio Safe prerelease (experimental)"
         required: false
         type: boolean
         default: false
@@ -14,8 +14,8 @@ on:
         description: "A/B: 1 omits GPU material thumbnail; 0 leaves upstream preview"
         required: true
         type: choice
-        options: ["1", "0"]
-        default: "1"
+        options: ["0", "1"]
+        default: "0"
       render_divisor:
         description: "A/B device input diagnostic: 1=full resolution, 2=half resolution"
         required: true
@@ -101,12 +101,13 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.render_divisor }}" == "1" ]]; then
             export ANDROID_BLENDER_RENDERDIV=1
           fi
-          export ANDROID_BLENDER_MATERIAL_GUARD=1
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.material_guard }}" == "0" ]]; then
-            export ANDROID_BLENDER_MATERIAL_GUARD=0
+          export ANDROID_BLENDER_MATERIAL_GUARD=0
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.material_guard }}" == "1" ]]; then
+            export ANDROID_BLENDER_MATERIAL_GUARD=1
           fi
+          export ANDROID_BLENDER_AUDIO_OFF=1
           echo "Material guard=$ANDROID_BLENDER_MATERIAL_GUARD, renderdiv=$ANDROID_BLENDER_RENDERDIV"
-          APK=dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk
+          APK=dist/blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk
           bash scripts/repack.sh upstream.apk "$APK"
           python3 scripts/verify_runtime.py "$APK" addon/safe_edit.py addon/touch_modeling.py
           unzip -p "$APK" lib/arm64-v8a/libblender.so > /tmp/final-blender.so
@@ -132,30 +133,30 @@ jobs:
             --dir dist/original
           python3 scripts/package_dual_apk.py \
             dist/original/blender-lite-android11-SAFE-EDIT-EXPERIMENTAL.apk \
-            dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk \
-            dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip
-          unzip -t dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip | tail -1
+            dist/blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk \
+            dist/Blender-Lite-v31-and-v39-Audio-Safe-APKs.zip
+          unzip -t dist/Blender-Lite-v31-and-v39-Audio-Safe-APKs.zip | tail -1
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: blender-lite-v38-MATERIAL-GUARD-${{ inputs.material_guard || '1' }}-renderdiv-${{ inputs.render_divisor || '2' }}-UNVERIFIED
+          name: blender-lite-v39-AUDIO-SAFE-UNVERIFIED
           path: |
-            dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk
-            dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip
+            dist/blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk
+            dist/Blender-Lite-v31-and-v39-Audio-Safe-APKs.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
-      - name: Publish v38 Material Guard direct APK prerelease
+      - name: Publish v39 Audio Safe direct APK prerelease
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "android11-v38-material-guard" \
-            "dist/blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk" \
-            "dist/Blender-Lite-v31-and-v38-Material-Guard-APKs.zip" \
+          gh release create "android11-v39-audio-safe" \
+            "dist/blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk" \
+            "dist/Blender-Lite-v31-and-v39-Audio-Safe-APKs.zip" \
             --target "$GITHUB_SHA" \
-            --title "Blender Lite v38 Material Guard + original v31 (experimental; device unverified)" \
+            --title "Blender Lite v39 Audio Safe + original v31 (experimental; unverified on device)" \
             --notes-file docs/RELEASE_NOTES.md --prerelease

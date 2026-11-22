@@ -15,6 +15,10 @@ ASSET = "assets/blender_runtime.zip"
 def verify(apk: Path, module: Path, extra: Path | None = None) -> None:
     source = module.read_bytes()
     with ZipFile(apk) as outer:
+        if os.environ.get("ANDROID_BLENDER_AUDIO_OFF", "1") == "1":
+            dex_files = [n for n in outer.namelist() if n.startswith("classes") and n.endswith(".dex")]
+            if not dex_files or not any(b"-noaudio" in outer.read(n) and b"blender_args.txt" in outer.read(n) for n in dex_files):
+                raise ValueError("Signed APK is missing pre-native noaudio flag")
         if ASSET not in outer.namelist():
             raise ValueError("APK missing original Blender runtime ZIP")
         with ZipFile(io.BytesIO(outer.read(ASSET))) as inner:

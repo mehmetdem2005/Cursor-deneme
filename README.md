@@ -1,6 +1,6 @@
 # Blender for Android 11 — experimental GLB import and Mali graphics profiles
 
-**Latest build:** v38 Material Guard experimental APK. On Android 11 / Mali devices it disables the GPU-backed *Material Properties thumbnail panel* registration while preserving New Material, material slots, shaders and the regular node editor. This is an A/B diagnostic mitigation, **not a confirmed fix** for native Mali or Vulkan freezes. Prior v33 Depth Guard settings are retained.
+**Latest build:** v39 Audio Safe experimental APK. The 22 Nov 2026 bugreport shows an AAudio playerSetVolume SIGSEGV and NativeActivity onPause ANR. This build writes `-noaudio` before native Blender starts (only if no existing custom `blender_args.txt`) and restores the upstream Material Properties preview panel disabled by v38. This is not a verified native/GPU fix.
 
 **Earlier build:** The Android 11 experiment now patches two Android 12-only Java fields in BlenderActivity. It still requires real-device testing; native linker and Vulkan compatibility remain unverified.
 
@@ -21,7 +21,7 @@ The original [simfeo/blender Android alpha 4](https://github.com/simfeo/blender/
 
 ## Build on GitHub
 
-Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk** from the [v38 release](../../releases/tag/android11-v38-material-guard), or use the build artifact when no published release exists.
+Every commit to \`main\` triggers [Blender Android 11 experimental APK](.github/workflows/build.yml). After a successful workflow, find the APK in GitHub Actions artifacts or [Releases](../../releases). Download **blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk** from the [v39 release](../../releases/tag/android11-v39-audio-safe), or use the build artifact when no published release exists.
 
 The build validates the upstream SHA-256, changes the declared Android minimum from 31 to 30, reassembles and signs the package, checks for arm64 native libraries, verifies the signature, and confirms the declared minimum is 30. It is an **experimental repack**, not a native port to API 30.
 

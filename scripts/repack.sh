@@ -21,6 +21,9 @@ python3 scripts/patch_sdk.py "$WORKDIR/decoded"
 
 echo "[3/9] Fix Android 12-only Java fields used before Blender startup"
 python3 scripts/patch_compat.py "$WORKDIR/decoded"
+if [[ "${ANDROID_BLENDER_AUDIO_OFF:-1}" == "1" ]]; then
+  python3 scripts/patch_audio_launch.py "$WORKDIR/decoded"
+fi
 if grep -R -n -E "Landroid/os/Build;->SOC_(MANUFACTURER|MODEL)" "$WORKDIR/decoded"/smali*; then
   echo "API 31 field access remains in DEX smali" >&2
   exit 1

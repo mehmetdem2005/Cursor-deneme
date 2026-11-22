@@ -40,13 +40,13 @@ class TouchDiagnosticsTests(unittest.TestCase):
         self.assertIn("EXTRA_ENTRY", pathlib.Path("scripts/patch_runtime.py").read_text())
         self.assertIn("addon/touch_modeling.py", pathlib.Path(".github/workflows/build.yml").read_text())
 
-    def test_v38_release_on_push_manual_dispatch_requires_opt_in(self):
+    def test_v39_release_on_push_manual_dispatch_requires_opt_in(self):
         wf = pathlib.Path(".github/workflows/build.yml").read_text()
-        self.assertIn("Blender Lite v38 - Mali Material Guard Diagnostic", wf)
+        self.assertIn("Blender Lite v39 - Audio Safe Startup", wf)
         self.assertIn("github.event_name == 'push'", wf)
         self.assertIn("inputs.publish_release == true", wf)
-        self.assertIn("android11-v38-material-guard", wf)
-        self.assertIn("blender-lite-android11-v38-MATERIAL-GUARD-EXPERIMENTAL.apk", wf)
+        self.assertIn("android11-v39-audio-safe", wf)
+        self.assertIn("blender-lite-android11-v39-AUDIO-SAFE-EXPERIMENTAL.apk", wf)
 
 
 if __name__ == "__main__":

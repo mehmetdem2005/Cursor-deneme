@@ -1,28 +1,7 @@
-# Blender Lite v38 Material Guard — A/B experimental build
+# Blender Lite v39 Audio Safe — Android 11 experimental
 
-v38 identifies the new repackaged APK release, NOT a rebuilt native Blender engine. This is a diagnostic mitigation, not a verified native crash fix. `material_guard=1` disables only the Material Properties GPU thumbnail. Normal New Material, material slots, shader nodes and 3D View Material Preview remain. `material_guard=0` keeps upstream thumbnail for comparison. Native Vulkan/GLES libraries are unchanged. Same pinned alpha-4 APK base; v31 original kept inside separate rollback ZIP. Save project backups before installing. Real Redmi Note 8 Pro tests still required.
+The 22 November 2026 MIUI report contains (1) Blender SIGSEGV in Android /system/lib64/libaaudio_internal.so AudioStream::MyPlayerBase::playerSetVolume at 02:00:03 and (2) an Android NativeActivity.onPause wait ANR at 01:57:51. Earlier Mali crashes remain separately possible.
 
-## Earlier v33 Mali Depth Guard
+The pinned upstream Android port reads internalDataPath/blender_args.txt before native GHOST_android_launch; Blender supports -noaudio. v39 makes BlenderActivity create this argument file before super.onCreate if absent. Existing custom argument files are not overwritten. The native Blender engine itself and system AAudio driver are unchanged. Material Properties preview removal added in v38 is no longer enabled by default. An optional A/B override remains for future tests.
 
-Built from v32 Paint Guard. Preserves:
-- Native half-resolution render divisor 2 and low-memory flag
-- 96 UI DPI, 128px viewport preview texture clamp
-- GPU subdivision OFF, anti-aliasing OFF, Solid/Flat GPU defaults
-- Native Android looper and 3-minute autosave
-- Texture Paint preparation, reversible Safe Texture Preview, diagnostics
-
-### New depth control
-- A one-time, reversible near/far viewport clip profile is prepared at app startup and after loading a file **only when Blender is in Object Mode**. This does not change mesh, skinning, armature, UVs, materials, render quality or framebuffer resolution.
-- SAFE (default): near 0.05 and far 50.0 Blender units.
-- STRONG (manual): near 0.1 and far 20.0 for diagnosing fine Z-fighting; very close details/distant objects can be clipped.
-- View > Safe GPU / Rig > Mali Depth Safe, Mali Depth Strong, or Restore Original Depth. Switch to Object Mode before using the menu.
-- If a project opens directly in Pose/Edit/Weight Paint, we do not modify GPU viewport state in those modes. Go to Object Mode and choose Mali Depth Safe once.
-- Saves made while the new clip profile is active may also save those viewport clip values (not mesh data); Restore Original Depth is provided. Back up .blend first.
-
-### Root cause still not proven
-Two prior MouseBody .blend versions were checked: no identical overlapping triangle areas were detected, but both saved clip_start 0.01/clip_end 1000 for 10 viewports. This strongly motivates a depth precision experiment, **not a proven native driver fix**.
-The Android alpha-4 Mali/Vulkan known stray triangle issue can remain. No real Mali-G76 GPU test was executed in GitHub CI.
-Compare same MouseBody file/view in SAFE and original settings. If artifacts persist, need sanitized device logcat/bugreport and a native Vulkan driver fix.
-
-The GitHub Release includes new v33 APK and a ZIP containing byte-for-byte v31 original (SHA256 c0a345b6496a903228932b6dd3425ffdbdf21a7d25b169996c3bd3e4a938f31b) and new v33 APK, with SHA256SUMS.
-Both APKs share package ID org.blender.blender and cannot be installed side-by-side. Test signing may differ; back up user data before changing versions.
+This is a targeted unverified mitigation, not proof of a root-cause fix. No real phone test was possible in CI. Keep .blend projects backed up; v31 rollback included in ZIP. Two APKs share one package identifier and signing may differ. Do not use the v39 APK for critical editing until a basic blank scene / Material New / app background test succeeds. If the phone locks again, stop using this test build.
